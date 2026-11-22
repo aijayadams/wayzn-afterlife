@@ -124,6 +124,9 @@ static bool calibrating = false;
 static uint32_t cal_start = 0;
 static bool fault = false;
 static String fault_why;
+static bool fault_open = false;  // the fault wants the door open (retried); a stopped-move fault doesn't
+static uint32_t fault_try_ms = 0;
+static int fault_tries = 0;
 static uint32_t reversals[8];
 static int n_rev = 0;
 static uint32_t open_since = 0;
@@ -142,8 +145,7 @@ static void cancelPendingClose(const char *why);
 // ---------- Grid-EYE ----------
 static ge::Detector det;
 static ge::Result ge_last;
-// v2 detector in SHADOW MODE (docs/DETECTION-RESEARCH.md stage 1): fed the same frames, it only
-// logs its decisions and where it would have differed. Nothing here acts on it.
+// v2 detector (docs/DETECTION-RESEARCH.md): the doorway is occupied if it or the original says so.
 static ge2::Detector det2;
 // v2's closed-door snapshot survives software resets (OTA, crash) in RTC memory, so a reboot
 // while the door is open doesn't turn the post-close warm-up into a false obstruction.
@@ -169,6 +171,12 @@ static float frame[64];
 static bool ge_ok = false, ge_stream = false, ge_raw = false;
 static uint32_t ge_fail = 0, last_presence_ms = 0, last_occupied_ms = 0, last_ge_ms = 0;
 static bool obstr_sent = false;   // what we last told the STM
+// After a reversal the STM waits in state 7 and recloses by itself as soon as it gets
+// clear_obstruction. rev_keep: don't clear it (stay open) because an open, a hold or a fault came
+// in since, or the doorway stayed occupied for 5 min. Cleared by a close request.
+static bool rev_keep = false;
+static uint32_t obstr_set_ms = 0, last_clear_ms = 0;
+static int cur_U = -1;  // STM control state, from status lines and (sooner) move summaries
 static int cur_now = 0, move_peak = 0, last_move_peak = -1;  // motor current (STM units: H / `c`)
 static uint32_t cur_poll_ms = 0;
 static String last_motion;        // last motion command sent (see motion())
@@ -176,7 +184,30 @@ static uint32_t last_motion_ms = 0;
 static uint32_t obstr_ms = 0;
 
 static void raiseFault(const String &why);
-static void requestOpen(const char *why);
+static void requestOpen(const char *why, bool force = false);
+static void cancelMotion();
+static void clearFault(const char *who);
+
+// Door state that must survive a software reset (OTA, crash, watchdog), in RTC memory: the HA
+// hold, a latched fault, the obstruction flag and post-reversal hold, and the last empty-doorway
+// backgrounds of both detectors (so a reboot with a dog in the doorway doesn't learn the dog as
+// background). A power cut clears it; that also resets the STM, which then has no position and
+// won't close until calibrated.
+struct RtcState {
+  uint32_t magic;
+  uint8_t api_hold, fault, fault_open, obstr, rev_keep, bg_ok;
+  char fault_why[96];
+  float bg1[64], bg2[64], var2[64];
+  uint32_t sum;
+};
+RTC_NOINIT_ATTR static RtcState rtc_st;
+static constexpr uint32_t RTC_ST_MAGIC = 0x57535432;  // "WST2"
+static uint32_t rtcStSum() {
+  uint32_t h = 2166136261u;
+  const uint8_t *b = (const uint8_t *)&rtc_st + sizeof rtc_st.magic;
+  for (size_t i = 0; i < offsetof(RtcState, sum) - sizeof rtc_st.magic; i++) h = (h ^ b[i]) * 16777619u;
+  return h;
+}
 
 static void pushConfig(bool zero_closed) {
   for (int i = 0; i < kDoorConfigN; i++) send(kDoorConfig[i]);
@@ -206,6 +237,7 @@ static void onBoot() {
   }
   q.clear();
   obstr_sent = false;  // the STM's flag restarts with it
+  rev_keep = false;
   last_motion = "";
   pushConfig(closed_stall);
 }
@@ -214,6 +246,31 @@ static void onBoot() {
 static bool cap_on = false;             // a close is being captured
 static uint32_t cap_evt = 0, cap_t0 = 0, cap_until = 0, cap_next = 0, cap_sent = 0, cap_lost = 0;
 static void captureStart();
+
+// A close the brain didn't command (the door's button; nothing else starts one on its own) gets
+// the rules of a Home Assistant close: it releases the hold; refused (reversed, door stays open)
+// on a fault, an unknown position or a sensor that isn't reading; with the doorway occupied it is
+// reversed by obstruction() and the STM recloses once the doorway is clear, like a pending close.
+static void onCloseStarted() {
+  uint32_t now = millis();
+  bool ours = calibrating || configuring || now - last_clear_ms < 8000 ||
+              ((last_motion == "close" || last_motion == "engage" || last_motion == "open_and_close") &&
+               now - last_motion_ms < 8000);
+  if (ours) return;
+  OUT.println("# close not commanded by the brain (door button): Home Assistant close rules apply");
+  cancelPendingClose("button close");
+  if (api_hold) { api_hold = false; OUT.println("# api hold released (button close)"); }
+  const char *no = fault ? "fault latched"
+                   : pos_know != POS_KNOWN ? "position not known"
+                   : (!ge_ok || !det.ready) ? "Grid-EYE not reading" : nullptr;
+  if (no) {
+    cancelMotion();
+    send("set_obstruction", true);
+    obstr_sent = rev_keep = true;
+    obstr_ms = obstr_set_ms = now;
+    OUT.printf("# button close refused (%s) -> set_obstruction: reverse and stay open\n", no);
+  }
+}
 
 static void onPhase(stm::DoorPhase np, int pos) {
   if (np == phase) return;
@@ -231,7 +288,8 @@ static void onPhase(stm::DoorPhase np, int pos) {
     if (recent >= REVERSALS_FAULT) raiseFault("oscillation: " + String(recent) + " reversals in 2 min");
   }
   if (np == stm::PH_OPEN) open_since = millis();
-  if (np == stm::PH_CLOSING) captureStart();
+  if (np == stm::PH_CLOSING) { captureStart(); if (phase != stm::PH_CLOSING) onCloseStarted(); }
+  if (np == stm::PH_CLOSED) rev_keep = false;
   if (cap_on) cap_until = stm::moving(np) ? 0 : millis() + 3000;
   if (np == stm::PH_CLOSED && api_hold) { api_hold = false; OUT.println("# api hold released (door closed)"); }
   if (np == stm::PH_FAILED) raiseFault("STM open failed (state 27)");
@@ -242,6 +300,7 @@ static void onPhase(stm::DoorPhase np, int pos) {
 static void onStatus() {
   const stm::Status &s = P.st;
   have_status = true;
+  cur_U = s.U;
   cur_now = s.H;
   if (stm::moving(stm::phase(s.U)) && cur_now > move_peak) move_peak = cur_now;
   last_status_ms = millis();
@@ -274,7 +333,10 @@ static void handleStmByte(char c) {
       OUT.printf("# move: pos=%d -> state %X, current %X (limit %X)\n", P.mv.pos, P.mv.state, P.mv.current, P.mv.limit);
       // The move summary prints the moment the state changes; status lines lag up to 1.5 s.
       // Pseudo-states in the first summary line (1, 2, 3) map to unknown and are skipped.
-      if (stm::phase(P.mv.state) != stm::PH_UNKNOWN) onPhase(stm::phase(P.mv.state), P.mv.pos);
+      if (stm::phase(P.mv.state) != stm::PH_UNKNOWN) {
+        cur_U = P.mv.state;
+        onPhase(stm::phase(P.mv.state), P.mv.pos);
+      }
       break;
     case stm::WIPED:
       OUT.println("# STM: calibration wiped by the button (~)");
@@ -308,9 +370,13 @@ static bool isMotion(const String &l) {
 static void cancelMotion() {
   for (auto it = q.begin(); it != q.end();) it = isMotion(*it) ? q.erase(it) : it + 1;
 }
-static bool motion(const char *cmd, const char *why) {
+static bool motion(const char *cmd, const char *why, bool force = false) {
   uint32_t now = millis();
-  if (last_motion == cmd && now - last_motion_ms < MOTION_DEDUP_MS) return false;
+  if (!force && last_motion == cmd && now - last_motion_ms < MOTION_DEDUP_MS) return false;
+  if (configuring && zero_after_config && strcmp(cmd, "stop") != 0) {
+    zero_after_config = false;  // the door moved: it is no longer at the closed stall
+    OUT.println("# config: the door moves during setup: won't zero it as closed");
+  }
   cancelMotion();
   send(cmd, true);
   last_motion = cmd;
@@ -324,7 +390,10 @@ static void raiseFault(const String &why) {
   if (!fault) OUT.printf("# FAULT: %s -> latching OPEN; `fault clear` to resume\n", why.c_str());
   fault = true;
   fault_why = why;
-  requestOpen("fault");
+  fault_open = true;
+  fault_try_ms = millis();
+  fault_tries = 0;
+  requestOpen("fault", true);  // never deduped: an open sent just before may have failed (state 27)
 }
 
 static void cancelPendingClose(const char *why) {
@@ -333,11 +402,17 @@ static void cancelPendingClose(const char *why) {
   OUT.printf("# pending close cancelled (%s)\n", why);
 }
 
-static void requestOpen(const char *why) {
+static void requestOpen(const char *why, bool force) {
   cancelPendingClose(why);
+  if (obstr_sent && !rev_keep && phase != stm::PH_CLOSED) {
+    rev_keep = true;  // the STM would reclose on clear_obstruction: keep it set
+    OUT.printf("# open (%s) after a reversal: staying open\n", why);
+  }
   if (phase == stm::PH_OPEN || phase == stm::PH_OPENING || phase == stm::PH_REVERSING) return;
-  // Position unknown: `disengage` drives fully open whatever the STM thinks (never lock out).
-  motion(pos_know == POS_KNOWN ? "open" : "disengage", why);
+  // Position unknown, or the STM's open just failed (27): `disengage` drives fully open whatever
+  // the STM thinks (never lock out).
+  bool plain = pos_know == POS_KNOWN && phase != stm::PH_FAILED;
+  motion(plain ? "open" : "disengage", why, force);
 }
 
 static bool requestClose(const char *why, String &no) {
@@ -347,10 +422,15 @@ static bool requestClose(const char *why, String &no) {
   if (s_obst && occupiedAny()) { no = "doorway not clear"; return false; }
   if (configuring) { no = "STM still being configured"; return false; }
   if (phase != stm::PH_OPEN) { no = String("door is ") + stm::phaseName(phase); return false; }
-  if (g2.occupied) {
-    g2_would_block++;
-    OUT.printf("# v2 WOULD BLOCK this close (%s): v2 occupied for %.1f s, peak %.2f\n", why,
-               (millis() - g2_occ_since) / 1000.0f, g2.peak);
+  if (obstr_sent) {
+    if (cur_U == 0x07) {  // waiting after a reversal: clearing the obstruction makes the STM reclose
+      if (rev_keep) OUT.printf("# close (%s) after a reversal: the door recloses now\n", why);
+      rev_keep = false;
+      return true;  // obstruction() clears it (the doorway is clear)
+    }
+    send("clear_obstruction", true);  // stay-open state: clear first, then close normally
+    obstr_sent = rev_keep = false;
+    obstr_ms = last_clear_ms = millis();
   }
   return motion("close", why);
 }
@@ -503,6 +583,16 @@ static void gridEye() {
     }
     return;
   }
+  // A sensor stuck on one frame reads "fine" forever; its noise makes 20 identical frames impossible.
+  static float prevf[64];
+  static int same = 0;
+  if (!memcmp(prevf, frame, sizeof prevf)) {
+    if (++same == 20 && ge_ok) { ge_ok = false; OUT.println("# Grid-EYE: frozen (20 identical frames): not reading"); }
+    if (same >= 20) return;
+  } else {
+    same = 0;
+  }
+  memcpy(prevf, frame, sizeof prevf);
   if (!ge_ok) { ge_ok = true; OUT.println("# Grid-EYE: reading"); }
   ge_fail = 0;
   bool was = ge_last.present, wasOcc = ge_last.occupied;
@@ -536,13 +626,28 @@ static void obstruction() {
     cancelMotion();  // no queued close may follow
     send("set_obstruction", true);
     obstr_sent = true;
-    obstr_ms = millis();
+    obstr_ms = obstr_set_ms = millis();
     OUT.printf("# obstruction: doorway occupied while closing (live=%d v2=%d) -> set_obstruction\n", ge_last.occupied,
                g2.occupied);
+  } else if (obstr_sent && danger && !rev_keep && phase == stm::PH_OPEN && millis() - obstr_set_ms > PENDING_MAX_MS) {
+    rev_keep = true;  // like a pending close: give up after 5 min
+    OUT.println("# doorway not clear 5 min after the reversal: staying open");
   } else if (obstr_sent && !danger) {
+    // In the stay-open, disengaged and closed states a clear doesn't move the door; elsewhere
+    // (7, still reversing) the STM recloses on it.
+    bool recloses = !(cur_U == 0x0F || cur_U == 0x1D || cur_U == 0x0E || cur_U == 0x1E);
+    if (recloses && (fault || api_hold || rev_keep)) {
+      static uint32_t said = 0;
+      if (millis() - said > 60000) {
+        said = millis();
+        OUT.printf("# doorway clear, staying open after the reversal (%s): obstruction kept set\n",
+                   fault ? "fault" : api_hold ? "HA hold" : "open requested or timed out");
+      }
+      return;
+    }
     send("clear_obstruction", true);
-    obstr_sent = false;
-    obstr_ms = millis();
+    obstr_sent = rev_keep = false;
+    obstr_ms = last_clear_ms = millis();
   }
 }
 
@@ -550,7 +655,11 @@ static void autoLogic() {
   if (occupiedAny() || !ge_ok) last_occupied_ms = millis();
   if (occupiedAny()) { last_occ_seen = millis(); occ_seen = true; }
   if (!s_auto || configuring || calibrating) return;
-  if (ge_last.present && (phase == stm::PH_CLOSED || phase == stm::PH_CLOSING)) requestOpen("presence");
+  // Presence opens from any state that isn't open or opening, including after an STM reboot
+  // (position unknown: requestOpen uses disengage).
+  bool not_open = phase == stm::PH_CLOSED || phase == stm::PH_CLOSING || phase == stm::PH_UNKNOWN ||
+                  phase == stm::PH_UNCONFIGURED || phase == stm::PH_FAILED;
+  if (ge_last.present && have_status && not_open) requestOpen("presence");
   if (s_auto_close && phase == stm::PH_OPEN && !obstr_sent && !api_hold &&
       millis() - last_occupied_ms >= s_hold_s * 1000 &&
       millis() - open_since >= s_hold_s * 1000) {
@@ -651,7 +760,7 @@ static void apiPoll() {
       case api::CMD_OPEN:
         api_hold = true;
         OUT.println("# api: open (hold open until HA closes)");
-        requestOpen("home assistant");
+        requestOpen("home assistant", true);
         api::finish(r, true, nullptr);
         break;
       case api::CMD_CLOSE: {
@@ -680,6 +789,10 @@ static void apiPoll() {
           saveSettings(det);
         }
         OUT.printf("# api: auto %s\n", s_auto ? "ON" : "off");
+        api::finish(r, true, nullptr);
+        break;
+      case api::CMD_CLEAR_FAULT:
+        clearFault("home assistant");
         api::finish(r, true, nullptr);
         break;
       case api::CMD_STOP:
@@ -725,6 +838,55 @@ static void apiPoll() {
   api::release();
 }
 
+static void rtcSave() {
+  static uint32_t last_bg = 0;
+  uint32_t now = millis();
+  bool valid = rtc_st.magic == RTC_ST_MAGIC;
+  bool chg = !valid || rtc_st.api_hold != api_hold || rtc_st.fault != fault || rtc_st.fault_open != fault_open ||
+             rtc_st.obstr != obstr_sent || rtc_st.rev_keep != rev_keep || strcmp(rtc_st.fault_why, fault_why.c_str());
+  bool bg = ge_ok && det.ready && det2.ready && !occupiedAny() && !ge_last.present && now - last_bg > 5000;
+  if (!chg && !bg) return;
+  if (bg) {
+    memcpy(rtc_st.bg1, det.bg, sizeof rtc_st.bg1);
+    memcpy(rtc_st.bg2, det2.bg, sizeof rtc_st.bg2);
+    memcpy(rtc_st.var2, det2.var, sizeof rtc_st.var2);
+    rtc_st.bg_ok = 1;
+    last_bg = now;
+  } else if (!valid) {
+    rtc_st.bg_ok = 0;
+  }
+  rtc_st.api_hold = api_hold;
+  rtc_st.fault = fault;
+  rtc_st.fault_open = fault_open;
+  rtc_st.obstr = obstr_sent;
+  rtc_st.rev_keep = rev_keep;
+  strlcpy(rtc_st.fault_why, fault_why.c_str(), sizeof rtc_st.fault_why);
+  rtc_st.sum = rtcStSum();
+  rtc_st.magic = RTC_ST_MAGIC;
+}
+
+static void restoreRtcState() {
+  if (rtc_st.magic != RTC_ST_MAGIC || rtc_st.sum != rtcStSum()) {
+    rtc_st.magic = 0;
+    OUT.println("# rtc: no saved door state (power-on)");
+    return;
+  }
+  api_hold = rtc_st.api_hold;
+  fault = rtc_st.fault;
+  fault_open = rtc_st.fault_open;
+  obstr_sent = rtc_st.obstr;
+  rev_keep = rtc_st.rev_keep;
+  rtc_st.fault_why[sizeof rtc_st.fault_why - 1] = 0;
+  fault_why = rtc_st.fault_why;
+  if (fault) fault_try_ms = millis();
+  if (rtc_st.bg_ok) {
+    det.loadBackground(rtc_st.bg1);
+    det2.loadBackground(rtc_st.bg2, rtc_st.var2);
+  }
+  OUT.printf("# rtc: restored hold=%d fault=%s obstruction=%d stay_open=%d backgrounds=%s\n", api_hold,
+             fault ? fault_why.c_str() : "none", obstr_sent, rev_keep, rtc_st.bg_ok ? "yes" : "no");
+}
+
 static void supervise() {
   uint32_t now = millis();
   if (close_pending) {
@@ -746,7 +908,8 @@ static void supervise() {
   }
   // STM liveness: on ESP boot give it 25 s to speak (it may be at its 10 s rate), then reset it.
   // Later: 30 s of silence -> reset, at most once a minute.
-  if (!heard && now - boot_ms > 25000 && stm_resets == 0) stmReset("no STM output since ESP boot");
+  if (!heard && now - boot_ms > 25000 && (stm_resets == 0 || now - last_rst_ms > 60000))
+    stmReset("no STM output since ESP boot");  // repeats each minute: one pulse may not start it
   if (heard && now - last_rx_ms > SILENT_RESET_MS && now - last_rst_ms > 60000) stmReset("STM silent 30 s");
   if (tx_on && now - last_tx_ms > KEEPALIVE_MS && q.empty()) send("c");
   // While moving, sample the motor current ~4x/s for the move's peak (status lines are 1.5 s apart).
@@ -764,6 +927,16 @@ static void supervise() {
       OUT.println("# config: done; position unknown until `cal`");
     }
   }
+  // A fault holds the door open: retry the open (3 times, 15 s apart) if it isn't open.
+  if (!fault) fault_open = false;
+  if (fault && fault_open && tx_on && !configuring && !stm::moving(phase) && phase != stm::PH_OPEN && q.empty() &&
+      now - fault_try_ms > 15000 && fault_tries < 3) {
+    fault_try_ms = now;
+    fault_tries++;
+    OUT.printf("# fault: door is %s, not open: open retry %d/3\n", stm::phaseName(phase), fault_tries);
+    requestOpen("fault retry", true);
+  }
+  rtcSave();
   static uint32_t hb = 0;
   if (now - hb >= 30000) {
     hb = now;
@@ -796,12 +969,20 @@ static void supervise() {
 }
 
 // ---------- console ----------
+static void clearFault(const char *who) {
+  fault = fault_open = false;
+  fault_why = "";
+  n_rev = 0;
+  OUT.printf("# fault cleared (%s)\n", who);
+}
+
 static void printStatus() {
   const stm::Status &s = P.st;
   OUT.printf("# door=%s position=%s (%s) p=%d U=%X Z=%d H=%X K=%d fault=%s\n", stm::phaseName(phase),
              pos_know == POS_KNOWN ? "known" : pos_know == POS_INFERRED ? "inferred" : "UNKNOWN", pos_why, s.p, s.U,
              s.Z, s.H, s.K, fault ? fault_why.c_str() : "none");
-  OUT.printf("# occupied=%d (blocks closing; on %.2f off %.2f)\n", ge_last.occupied, det.p.occ_on, det.p.occ_off);
+  OUT.printf("# occupied=%d (original %d, v2 %d; blocks closing; on %.2f off %.2f) obstruction_sent=%d stay_open=%d\n",
+             occupiedAny(), ge_last.occupied, g2.occupied, det.p.occ_on, det.p.occ_off, obstr_sent, rev_keep);
   OUT.printf("# auto=%s hold=%us presence=%d (score %.1f hot=%d max=+%.1f) grideye=%s on=%.1f off=%.1f noise=%.1fC "
              "obstruction_sent=%d\n",
              s_auto ? "ON" : "off", (unsigned)s_hold_s, ge_last.present, ge_last.score, ge_last.hot, ge_last.max_delta,
@@ -838,11 +1019,11 @@ static void command(String c) {
   if (c.startsWith("b ")) return;  // tools/uart-sniffer/capture.py sends this on connect
   if (c == "?" || c == "help") help();
   else if (c == "status") printStatus();
-  else if (c == "open") requestOpen("command");
+  else if (c == "open") requestOpen("command", true);
   else if (c == "close") { if (!requestClose("command", no)) OUT.printf("# close refused: %s\n", no.c_str()); }
   else if (c == "stop") { last_motion = ""; motion("stop", "command"); calibrating = false; }
   else if (c == "cal") {
-    if (ge_last.present || !ge_ok) OUT.println("# cal refused: doorway not clear / Grid-EYE not reading");
+    if (ge_last.present || occupiedAny() || !ge_ok) OUT.println("# cal refused: doorway not clear / Grid-EYE not reading");
     else if (configuring) OUT.println("# cal refused: still configuring");
     else {
       send("clear_obstruction"); send("reset_zero"); motion("auto_zero", "calibration");
@@ -860,10 +1041,7 @@ static void command(String c) {
   else if (c == "ge on" || c == "ge off") ge_stream = c == "ge on";
   else if (c == "ge raw on" || c == "ge raw off") ge_raw = c == "ge raw on";
   else if (c == "gebg") { det.reset(); OUT.println("# grid-eye: relearning background (2 s)"); }
-  else if (c == "fault clear") {
-    fault = false; fault_why = ""; n_rev = 0;
-    OUT.println("# fault cleared");
-  }
+  else if (c == "fault clear") clearFault("console");
   else if (c == "cfg") pushConfig(false);
   else if (c == "sreset") stmReset("command");
   else if (c == "log on" || c == "log off") s_log = c == "log on";
@@ -897,6 +1075,7 @@ void setup() {
   net::on_poll = api::poll;
   net::begin(nullptr);
   restoreV2Ref();
+  restoreRtcState();
   Stm.setRxBufferSize(4096);
   Stm.begin(115200, SERIAL_8N1, PIN_STM_RX, -1);  // TX attached once the STM is heard
   Wire.begin(PIN_SDA, PIN_SCL, 100000);

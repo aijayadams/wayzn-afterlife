@@ -41,7 +41,7 @@ struct Snapshot {
   uint32_t uptime_s = 0;
 };
 
-enum Cmd : uint8_t { CMD_OPEN, CMD_CLOSE, CMD_STOP, CMD_AUTO, CMD_SETTINGS };
+enum Cmd : uint8_t { CMD_OPEN, CMD_CLOSE, CMD_STOP, CMD_AUTO, CMD_SETTINGS, CMD_CLEAR_FAULT };
 struct Request {
   Cmd cmd;
   bool arg;
@@ -165,6 +165,7 @@ static void begin() {
   web->on("/api/open", HTTP_POST, [] { handleCmd(CMD_OPEN); });
   web->on("/api/close", HTTP_POST, [] { handleCmd(CMD_CLOSE); });
   web->on("/api/stop", HTTP_POST, [] { handleCmd(CMD_STOP); });
+  web->on("/api/clear_fault", HTTP_POST, [] { handleCmd(CMD_CLEAR_FAULT); });
   web->on("/api/settings", HTTP_POST, [] {
     String b = web->arg("plain");
     handleCmd(CMD_SETTINGS, false, &b);

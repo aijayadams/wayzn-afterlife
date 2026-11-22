@@ -99,22 +99,24 @@ flowchart TB
   rise over a noise floor (a dog warms 4–7 pixels by only 1–2 °C). Two levels:
   *presence* (open for the dog) and a more sensitive *occupied* (never close, and
   reverse a close).
-- **Shadow detector**: a second Grid-EYE detector (`presence2.h`: per-pixel smoothing
-  and noise normalisation, more sensitive to a dog at the edge of the view) runs on
-  every frame and only logs, including where it would have blocked or reversed a close.
-  See [docs/DETECTION-RESEARCH.md](DETECTION-RESEARCH.md).
+- **Second detector**: `presence2.h` (per-pixel smoothing and noise normalisation, more
+  sensitive to a dog at the edge of the view). The doorway is occupied if either detector
+  says so. See [docs/DETECTION-RESEARCH.md](DETECTION-RESEARCH.md).
 - **Safety**: closes only when the position is known, the sensor is reading and the
   doorway is clear; `set_obstruction` only while closing; 3 reversals in 2 min, a move
-  timeout or a failed calibration latch the door **open** with a fault. An open with
-  unknown position drives fully open.
-- **Home Assistant**: `GET /api/status`, `POST /api/open|close|stop|auto|settings`
+  timeout or a failed calibration latch the door **open** with a fault (cleared from HA or the
+  console). An open with unknown position drives fully open. After a reversal the door recloses
+  once the doorway is clear, unless an open, a hold or a fault came in. A close from the door's
+  button follows the same rules as a close from HA. The hold, a fault and the detectors'
+  backgrounds survive an ESP32 software reset.
+- **Home Assistant**: `GET /api/status`, `POST /api/open|close|stop|auto|settings|clear_fault`
   with a bearer token ([docs/API.md](API.md)). An open from HA holds the door
   until HA closes it. `/api/settings` sets auto-open, auto-close, obstruction
   detection, hold time, open position and detector thresholds; all values are
   validated, applied all-or-nothing, saved on the door and logged. The HA side is the `wayzn` integration's local mode
   ([aijayadams/wayzn](https://github.com/aijayadams/wayzn)).
 
-- **Logs**: a telnet console (`nc wayzn-esp.local 23`), and optionally every event
+- **Logs**: a telnet console (`nc wayzn-esp.local 23`, first line `auth <api_token>`), and optionally every event
   line as RFC 5424 syslog over UDP ([firmware/brain/README.md](../firmware/brain/README.md)).
 
 Secrets (Wi-Fi, OTA, API token, syslog host) live only in a gitignored `secrets.ini`

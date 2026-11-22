@@ -8,9 +8,10 @@ otherwise `401`.
 | Request | Reply | Notes |
 |---|---|---|
 | `GET /api/status` | `200` JSON, below | |
-| `POST /api/open` | `200 {"ok":true}` | **Always accepted** (never lock a dog out). Holds the door open (no auto-close) until `/api/close`. Unknown position: drives fully open (`disengage`). |
+| `POST /api/open` | `200 {"ok":true}` | **Always accepted** (never lock a dog out). Holds the door open (no auto-close) until `/api/close` or a close from the door's button; the hold survives an ESP32 software reset. Unknown position: drives fully open (`disengage`). |
 | `POST /api/close` | `200 {"ok":true}`, `200 {"ok":true,"reason":"waiting for the doorway to clear"}`, or `409 {"ok":false,"reason":"…"}` | If the doorway is occupied, the close is accepted and runs once the doorway has been clear for 3 s; it expires after 5 min and is cancelled by any open or a fault (`close_pending` in the status). Refused (409) when a fault is latched, the position isn't known or the Grid-EYE isn't reading. Closed or closing already: `200` with a reason. |
 | `POST /api/stop` | `200 {"ok":true}` | |
+| `POST /api/clear_fault` | `200 {"ok":true}` | Clears a latched fault (the door holds itself open until then). |
 | `POST /api/settings` body: any subset of `settings` below | `200 {"ok":true}` or `400 {"ok":false,"reason":"…"}` | All keys are validated first, then all are applied (or none). Unknown keys, wrong types and out-of-range values are rejected, never clamped. Saved on the door; every change is logged. |
 | `POST /api/auto` body `{"on":true}` / `{"on":false}` | `200 {"ok":true}`, `400` on any other body | Grid-EYE auto-open (and its auto-close) on/off. Saved on the door. HA's open/close work either way. |
 
@@ -59,4 +60,4 @@ Commands are acknowledged in ~0.1-0.2 s (measured); the move itself takes ~5-8 s
 | `occupied_threshold` | 0.2..5, <= presence | the safety level: doorway not clear |
 | `noise_c` | 0.2..2 | per-pixel noise floor (°C) for the score |
 
-Console only (`nc wayzn-esp.local 23`): calibration, fault clear, raw STM commands.
+Console only (`nc wayzn-esp.local 23`, first line `auth <api_token>`): calibration, fault clear, raw STM commands.

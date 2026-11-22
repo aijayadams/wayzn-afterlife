@@ -158,6 +158,28 @@ static void tests() {
     CHECK(held >= 200);
     printf("  no snapshot, dog 20 s after close: caught after %d frames, occupied %d of 400 frames\n", k_occ, held);
   }
+  // 10. Reboot with a dog in the doorway (+1.5 C over 4 px). Learning from the first frames takes
+  //     the dog as background (both detectors blind); a background restored from RTC memory sees it.
+  {
+    ge::Detector v1; ge2::Detector d2;
+    for (int k = 0; k < 600; k++) { noisy(f, 17.0f); v1.update(f); d2.update(f, true); }
+    float b1[64], b2[64], var2[64];
+    memcpy(b1, v1.bg, sizeof b1); memcpy(b2, d2.bg, sizeof b2); memcpy(var2, d2.var, sizeof var2);
+    auto dog = [&](float *fr) { noisy(fr, 17.0f); fr[33] += 1.5f; fr[34] += 1.5f; fr[41] += 1.5f; fr[42] += 1.5f; };
+    for (int restored = 0; restored <= 1; restored++) {
+      ge::Detector n1; ge2::Detector n2;
+      if (restored) { n1.loadBackground(b1); n2.loadBackground(b2, var2); }
+      int occ = 0;
+      for (int k = 0; k < 100; k++) {
+        dog(f);
+        ge::Result r1 = n1.update(f); ge2::Result r2 = n2.update(f, false);
+        if (k >= 30) occ += r1.occupied || r2.occupied;
+      }
+      if (restored) CHECK(occ >= 65); else CHECK(occ <= 5);
+      printf("  reboot with a dog in the doorway, background %s: occupied %d of 70 frames\n",
+             restored ? "restored" : "learned from first frames", occ);
+    }
+  }
   printf("tests: %s (%d failures)\n", fails ? "FAIL" : "ok", fails);
 }
 

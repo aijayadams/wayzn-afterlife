@@ -28,9 +28,24 @@ Behaviour:
 - Grid-EYE presence → `set_obstruction` (the STM reverses a close); sensor failure counts
   as not clear. Close is refused unless position is known, the doorway is clear and the
   sensor is reading.
-- `auto on`: presence opens the door (from closed or closing); it closes after `hold`
-  seconds with the doorway clear. Default off.
-- Faults latch OPEN (3 reversals in 2 min, move timeout, STM state 27, failed calibration).
+- `auto on`: presence opens the door from any state that isn't open or opening (with the
+  position unknown, by `disengage`); it closes after `hold` seconds with the doorway clear.
+  Default off.
+- After a reversal the STM waits (state 7) and recloses by itself on `clear_obstruction`, sent
+  once the doorway has been clear ~3 s. If an open, an HA hold or a fault comes in meanwhile, or
+  the doorway stays occupied 5 min, the obstruction stays set and the door stays open until a close.
+- The door's button: a close it starts gets the same rules as an HA close (releases the hold;
+  reversed and held open on a fault, unknown position or sensor not reading; reversed and
+  reclosed once clear if the doorway is occupied). Its open is unrestricted.
+- Faults latch OPEN (3 reversals in 2 min, move timeout, STM state 27, failed calibration); the
+  open is retried (3 times, 15 s apart) if the door isn't open. Clear with `POST /api/clear_fault`
+  or `fault clear`.
+- Kept across ESP32 software resets (RTC memory): the HA hold, a fault, the obstruction flag, and
+  the last empty-doorway backgrounds of both detectors (so a dog in the doorway at boot isn't
+  learned as background). A power cut clears them.
+- STM silent since ESP boot: NRST pulse at 25 s, then once a minute until it talks.
+- Grid-EYE returning 20 identical frames counts as not reading.
+- Telnet console: the first line must be `auth <api_token>`; anything else disconnects.
 - Open with unknown position uses `disengage` (always drives fully open).
 - No OTA while the door is moving.
 - Detection: the doorway is occupied (no closing; a close reverses) if either the original detector

@@ -106,6 +106,14 @@ class Detector {
   // The closed-door snapshot (taken when the door starts to open), so a caller can keep it across
   // a reboot. refSeq() changes each time a new one is taken.
   bool hasRef() const { return have_ref_; }
+  // Background and noise saved before a software reset (RTC memory), instead of learning the
+  // first frames (which would take a dog in the doorway as background).
+  void loadBackground(const float b[64], const float v[64]) {
+    memcpy(bg, b, sizeof bg);
+    memcpy(var, v, sizeof var);
+    n_ = kWarmup;
+    ready = true;
+  }
   const float *refData() const { return ref; }
   uint32_t refSeq() const { return ref_seq_; }
   void loadRef(const float r[64]) { memcpy(ref, r, sizeof ref); have_ref_ = true; }

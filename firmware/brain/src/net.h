@@ -2,7 +2,8 @@
 //
 // - Joins the Wi-Fi from secrets.ini (WIFI_SSID / WIFI_PSK), hostname wayzn-esp.
 // - Telnet console on port 23 (nc wayzn-esp.local 23): the same output as USB serial,
-//   and it takes the same commands. One client at a time; a new one replaces the old.
+//   and it takes the same commands, once the client's first line is `auth <API_TOKEN>` (a wrong
+//   first line disconnects it). One client at a time; a new one replaces the old.
 // - ArduinoOTA (password OTA_PASS), handled only while disarmed, so an update can't
 //   start while motion commands are allowed.
 //
@@ -131,6 +132,9 @@ static void task(void *) {
   static uint8_t chunk[1024];
   static size_t pend_len = 0, pend_off = 0;
   static uint32_t last_progress = 0;
+  static bool authed = false;
+  static char auth_line[160];
+  static size_t auth_len = 0;
   for (;;) {
     if (!up && WiFi.status() == WL_CONNECTED) {
       up = true;
@@ -159,11 +163,12 @@ static void task(void *) {
         if (client) client.stop();
         client = n;
         client.setNoDelay(true);
-        xStreamBufferReset(txbuf);
+        connected = false;  // no output and no commands until the client sends `auth <API token>`
+        authed = false;
+        auth_len = 0;
         pend_len = pend_off = 0;
         last_progress = millis();
-        connected = true;
-        out.println("# telnet client connected (send ? for help)");
+        client.print("# wayzn-brain console: send `auth <api token>`\r\n");
       }
       bool has = client && client.connected();
       if (connected && !has) {
@@ -194,7 +199,29 @@ static void task(void *) {
         }
         while (client.available()) {
           uint8_t c = client.read();
-          xStreamBufferSend(rxbuf, &c, 1, 0);
+          if (authed) {
+            xStreamBufferSend(rxbuf, &c, 1, 0);
+            continue;
+          }
+          if (c == '\r') continue;
+          if (c != '\n') {
+            if (auth_len < sizeof auth_line - 1) auth_line[auth_len++] = (char)c;
+            continue;
+          }
+          auth_line[auth_len] = 0;
+          if (!strcmp(auth_line, "auth " API_TOKEN)) {
+            authed = true;
+            xSemaphoreTake(txlock, portMAX_DELAY);
+            xStreamBufferReset(txbuf);  // under the lock: the door loop writes it
+            connected = true;
+            xSemaphoreGive(txlock);
+            out.println("# telnet client authenticated (send ? for help)");
+          } else {
+            client.print("# auth failed\r\n");
+            client.stop();
+            Serial.println("# telnet: wrong auth line, disconnected");
+            break;
+          }
         }
       }
     }

@@ -12,6 +12,7 @@
 // and ~1/alpha_present while something is: a dog lying still is absorbed only slowly, and a
 // stuck "present" (sun patch, heater) recovers eventually instead of holding the door forever.
 #pragma once
+#include <string.h>
 #include <stdint.h>
 #include <math.h>
 
@@ -50,6 +51,14 @@ class Detector {
   Params p;
   float bg[64];
   bool ready = false;
+
+  // A background saved before a software reset (RTC memory): use it instead of learning the
+  // first frames, which would take whatever is in the doorway as background.
+  void loadBackground(const float b[64]) {
+    memcpy(bg, b, sizeof bg);
+    warm_n_ = kWarmup;
+    ready = true;
+  }
 
   // Feed one frame (degrees C). The first `warmup` frames only build the background.
   Result update(const float t[64]) {
