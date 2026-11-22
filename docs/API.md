@@ -24,7 +24,7 @@ Commands are acknowledged in ~0.1-0.2 s (measured); the move itself takes ~5-8 s
  "presence":false,"occupied":false,"auto":true,"hold":false,"grideye_ok":true,
  "status_age_ms":6847,"uptime_s":14,
  "settings":{"auto_open":true,"auto_close":true,"obstruction_detection":true,"hold_s":15,
-  "open_percent":45.2,"open_counts":-6136,"presence_threshold":1.00,"occupied_threshold":0.60,
+  "open_percent":45.2,"open_inches":8.0,"open_counts":-6136,"presence_threshold":1.00,"occupied_threshold":0.60,
   "noise_c":0.70}}
 ```
 
@@ -49,6 +49,7 @@ Commands are acknowledged in ~0.1-0.2 s (measured); the move itself takes ~5-8 s
 | `obstruction_detection` | bool | Grid-EYE "occupied" blocks closing and reverses a close. Off leaves only the STM's motor-current limit (logged as a warning) |
 | `hold_s` | 3..600 | seconds the doorway must be clear before an auto-close |
 | `open_percent` | 15..95 | open position as % of full travel (13588 counts); 45.2 = the imp's "8 inch" |
+| `open_inches` | 2.7..16.8 | the same, in inches of door opening (767 counts per inch; 8.0 = -6136) |
 | `open_counts` | -12908..-2038 | the same, in encoder counts (exact) |
 | `presence_threshold` | 0.3..10 | detector score that means "a dog wants out" (lower = more sensitive) |
 | `occupied_threshold` | 0.2..5, <= presence | the safety level: doorway not clear |

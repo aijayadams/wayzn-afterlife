@@ -43,7 +43,8 @@ static bool s_auto_close = true; // auto-close after a presence open (only while
 static bool s_obst = true;       // Grid-EYE obstruction detection: blocks closing, reverses a close
 static uint32_t s_hold_s = 15;   // close this long after the doorway is clear
 static constexpr int32_t TRAVEL_COUNTS = 13588;  // full travel (set_dooroffset), for open_percent
-static int32_t s_open_counts = -6136;            // set_open_to (the imp's 8" = 45.2 %)
+static int32_t s_open_counts = -6136;            // set_open_to (8 in = 45.2 %)
+static constexpr float COUNTS_PER_INCH = 767.0f; // the imp's set_open_to mapping (8 in = -6136, 12 in = -9204)
 static bool s_log = false;       // print every STM status line
 
 static void loadSettings(ge::Detector &d) {
@@ -423,6 +424,7 @@ static void autoLogic() {
 // Validates every key first, then applies all of them (or none). Unknown keys and out-of-range
 // values are rejected, never clamped silently. Every change is logged (and so goes to syslog).
 static float openPercent() { return roundf(-s_open_counts * 1000.0f / TRAVEL_COUNTS) / 10.0f; }
+static float openInches() { return roundf(-s_open_counts * 10.0f / COUNTS_PER_INCH) / 10.0f; }
 
 static bool applySettings(const char *body, String &err) {
   JsonDocument doc;
@@ -453,6 +455,10 @@ static bool applySettings(const char *body, String &err) {
     else if (!strcmp(k, "obstruction_detection")) ok = flag(v, k, obst);
     else if (!strcmp(k, "hold_s")) { ok = num(v, k, 3, 600, f); hold = (uint32_t)lroundf(f); }
     else if (!strcmp(k, "open_percent")) { ok = num(v, k, 15, 95, f); open_counts = -lroundf(f * TRAVEL_COUNTS / 100.0f); }
+    else if (!strcmp(k, "open_inches")) {
+      ok = num(v, k, 0.15f * TRAVEL_COUNTS / COUNTS_PER_INCH, 0.95f * TRAVEL_COUNTS / COUNTS_PER_INCH, f);
+      open_counts = -lroundf(f * COUNTS_PER_INCH);
+    }
     else if (!strcmp(k, "open_counts")) { ok = num(v, k, -0.95f * TRAVEL_COUNTS, -0.15f * TRAVEL_COUNTS, f); open_counts = lroundf(f); }
     else if (!strcmp(k, "presence_threshold")) ok = num(v, k, 0.3f, 10, pres);
     else if (!strcmp(k, "occupied_threshold")) ok = num(v, k, 0.2f, 5, occ);
@@ -554,6 +560,7 @@ static void apiPoll() {
   sn.hold_s = s_hold_s;
   sn.open_counts = s_open_counts;
   sn.open_percent = openPercent();
+  sn.open_inches = openInches();
   sn.presence_th = det.p.on_score;
   sn.occupied_th = det.p.occ_on;
   sn.noise_c = det.p.noise_c;
