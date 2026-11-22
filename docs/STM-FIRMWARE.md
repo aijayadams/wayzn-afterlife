@@ -63,7 +63,7 @@ controller offset 0x9F0. The 10 ms control step acts on it, then clears it.
 | `mreset` | `[0\|1]` | | **direct** | no arg: toggles PA5; with arg: writes PA5 (motor-driver pin) | |
 | `go` | `<speed>` | | **YES, direct** | raw motor speed | |
 | `c` | | | no | motor current | decimal, `28` idle (verified) |
-| `limit` | `<n>` | | indirect | current limit | |
+| `limit` | `<n>` | | no | stored and passed to the motor-driver setup (`FUN_080027fc`, clamped to 3022; 1030 at boot). **No measurable effect on motor current:** with `limit 400`, open peaks stayed at ~705-775 and close peaks at ~440-625, the same as at 1030 (alternating test, 3 cycles each) | |
 | `zero` | `<pos> <state>` | | **can** | sets **zerod = 1**, state = `<state>`. Resting state: sets position to `<pos>`. If `<state>` is 12/13 (opening/closing) or 26–28 (disengage/engage moves), stores a *pending* restore instead | |
 | `decay` | `[slow\|fast\|mixed]` | | indirect | DRV8828 decay mode | |
 | `p` `v` `a` | `[n]` | | **YES** | target position / velocity / acceleration | value |
