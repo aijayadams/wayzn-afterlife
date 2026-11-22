@@ -6,6 +6,7 @@
 //   move:     <{>{<^>^<(>(<)>)<`>`<#>#          (bucket, position, expected I, limit, new state, current)
 //   boot:     @@ then a partial status and a move summary
 //   replies:  decimal, terminated by \r\n (`quad` -> -72, `vsense` -> 11606, `c` -> 28)
+//   profile:  reply to `get_profile`: <v>P x144 (open table), then <v>g x144 (close table)
 //   events:   `~` calibration wiped (button event 6), `+` (BT, ignored)
 // None of the key chars is a hex digit, so a value is whatever hex digits precede a key.
 #pragma once
@@ -14,7 +15,7 @@
 
 namespace stm {
 
-enum Event { NONE, STATUS, MOVE, BOOT, REPLY, WIPED };
+enum Event { NONE, STATUS, MOVE, BOOT, REPLY, WIPED, PROF_OPEN, PROF_CLOSE };
 
 struct Status {
   int U = -1, Z = 0, dest = 0, H = 0, semi = 0, eq = 0, p = 0, K = 0;
@@ -29,6 +30,7 @@ class Parser {
   Move mv;        // last complete move summary
   int reply = 0;
   int version = 0;
+  int prof = 0;   // last profile value (PROF_OPEN / PROF_CLOSE)
 
   Event feed(char c) {
     if (isHex(c) || (c == '-' && n_ == 0)) {
@@ -65,6 +67,8 @@ class Parser {
       case '`': mcur_.state = v; break;
       case '#': mcur_.current = v; mv = mcur_; ev = MOVE; break;
       case '~': ev = WIPED; break;
+      case 'P': if (had) { prof = v; ev = PROF_OPEN; } break;
+      case 'g': if (had) { prof = v; ev = PROF_CLOSE; } break;
       case '\r':
       case '\n':
         if (had && decimal(reply)) ev = REPLY;

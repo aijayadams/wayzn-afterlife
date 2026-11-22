@@ -21,7 +21,6 @@
 #include "stm_parse.h"
 #include "presence.h"
 #include "presence2.h"
-#include "door_config.h"
 #include <ArduinoJson.h>
 #include "api.h"
 
@@ -46,9 +45,31 @@ static uint32_t s_hold_s = 15;   // close this long after the doorway is clear
 // travel more than CAL_TRAVEL_TOL away is treated as failed (0 = no check). Not a door constant.
 static int32_t s_expected_travel = 0;
 static constexpr float CAL_TRAVEL_TOL = 0.02f;
+// auto_zero's closing pass counts up from the open end. Its last status before a reboot at the
+// closed stall lags the stall by up to 1.5 s (seen: p 12333 and 12553 for a 13588 travel), so
+// "at the closed end" is past this fraction of the expected travel.
+static constexpr float CAL_END_FRAC = 0.85f;
 static int32_t s_open_counts = -6136;            // set_open_to (8 in = 45.2 %)
 static constexpr float COUNTS_PER_INCH = 767.0f; // the imp's set_open_to mapping (8 in = -6136, 12 in = -9204)
 static bool s_log = false;       // print every STM status line
+// The STM's learned motor-effort profile (open and close tables, 144 points each). auto_zero clears
+// and relearns it, but the STM keeps it only in RAM: the brain reads it back after a good
+// calibration (`get_profile`), keeps it in NVS and sends it after every STM boot. Learned, not a
+// firmware constant; with none stored the STM runs on its default (wider) margins.
+static constexpr int PROF_N = 144;
+static uint16_t prof_tab[2][PROF_N];
+static bool prof_ok = false;
+static bool profValid(const uint16_t t[2][PROF_N]) {
+  for (int d = 0; d < 2; d++) {
+    int nz = 0;
+    for (int i = 0; i < PROF_N; i++) {
+      if (t[d][i] > 0xFFF) return false;
+      if (t[d][i]) nz++;
+    }
+    if (nz < 100) return false;  // a full travel fills ~140 points
+  }
+  return true;
+}
 
 static void loadSettings(ge::Detector &d) {
   prefs.begin("brain", false);
@@ -58,6 +79,7 @@ static void loadSettings(ge::Detector &d) {
   s_obst = prefs.getBool("obst", true);
   s_open_counts = prefs.getInt("opento", -6136);
   s_expected_travel = prefs.getInt("etravel", 0);
+  prof_ok = prefs.getBytes("prof", prof_tab, sizeof prof_tab) == sizeof prof_tab && profValid(prof_tab);
   d.p.occ_on = prefs.getFloat("occ", 0.6f);
   d.p.occ_off = d.p.occ_on * 0.58f;
   d.p.on_score = prefs.getFloat("on2", 1.0f);
@@ -79,6 +101,8 @@ static void saveSettings(const ge::Detector &d) {
   prefs.putULong64("mask", d.p.mask);
 }
 
+static void saveProfile() { prefs.putBytes("prof", prof_tab, sizeof prof_tab); }
+
 // ---------- STM link ----------
 static HardwareSerial Stm(1);
 static stm::Parser P;
@@ -99,14 +123,28 @@ static void attachTx() {
 static void send(const String &l, bool urgent = false) {
   if (urgent) q.push_front(l); else q.push_back(l);
 }
+// Profile read-back (`get_profile`): the STM prints 288 values, 25 ms apart (~7 s). Nothing else is
+// sent meanwhile (PROF_READ_MS at most); it is only started with the door idle and the doorway clear.
+static constexpr uint32_t PROF_READ_MS = 10000;
+static bool prof_want = false, prof_reading = false;
+static uint32_t prof_read_ms = 0;
+static uint16_t prof_new[2][PROF_N];
+static int prof_cnt[2] = {0, 0};
+
 static void pumpQueue() {
   if (!tx_on || q.empty() || millis() - last_tx_ms < SEND_GAP_MS) return;
+  if (prof_reading && millis() - prof_read_ms < PROF_READ_MS) return;
   String l = q.front();
   q.pop_front();
   Stm.print(l);
   Stm.print('\n');
   last_tx_ms = millis();
   if (!l.startsWith("set_profile") && l != "c") OUT.printf("# stm< %s\n", l.c_str());
+  if (l == "get_profile") {
+    prof_reading = true;
+    prof_read_ms = millis();
+    prof_cnt[0] = prof_cnt[1] = 0;
+  }
 }
 static void stmReset(const char *why) {
   gpio_set_level((gpio_num_t)PIN_STM_RST, 0);
@@ -124,6 +162,7 @@ static const char *pos_why = "no STM status yet";
 static stm::DoorPhase phase = stm::PH_UNKNOWN;
 static uint32_t phase_since = 0;
 static bool configuring = false, zero_after_config = false, zero_inferred = false;
+static int32_t zero_k = 0;  // travel to set before an inferred zero (set_dooroffset)
 static uint32_t last_cfg_ms = 0;
 static bool calibrating = false;
 // Position recovery: after a start (power cut, STM reboot) the STM has no position. The brain
@@ -194,6 +233,10 @@ static bool rev_keep = false;
 static uint32_t obstr_set_ms = 0, last_clear_ms = 0;
 static int cur_U = -1;  // STM control state, from status lines and (sooner) move summaries
 static int cur_now = 0, move_peak = 0, last_move_peak = -1;  // motor current (STM units: H / `c`)
+// Effort: motor current as a % of the STM's own current limit at that moment, from its move
+// summaries (printed at each state change; the limit follows the learned profile). Over 100 % for
+// ~350 ms is the STM's own overcurrent reversal. The current's scale in amps isn't known.
+static int move_effort = -1, last_move_effort = -1, last_effort_cur = 0, last_effort_lim = 0;
 static uint32_t cur_poll_ms = 0;
 static String last_motion;        // last motion command sent (see motion())
 static uint32_t last_motion_ms = 0;
@@ -225,24 +268,51 @@ static uint32_t rtcStSum() {
   return h;
 }
 
-static void pushConfig(bool zero_closed) {
-  for (int i = 0; i < kDoorConfigN; i++) send(kDoorConfig[i]);
-  send(String("set_open_to ") + s_open_counts);  // the saved setting overrides door_config.h
+// STM setup (no motion), sent after every STM boot. Door-specific values come from NVS (the learned
+// profile, the open position) or, for an inferred zero, from the travel (`k`).
+static void pushConfig(bool zero_closed, int32_t k = 0) {
+  int n = 0;
+  if (prof_ok) {
+    for (int d = 0; d < 2; d++)
+      for (int i = 0; i < PROF_N; i += 8) {
+        String l = String("set_profile ") + (d ? "close " : "open ") + i;
+        for (int j = i; j < i + 8; j++) l += String(" ") + prof_tab[d][j];
+        send(l);
+        n++;
+      }
+  }
+  send(String("set_open_to ") + s_open_counts);
+  send("set_open_wait 15");  // unused: the brain closes the door itself
+  send("set_button_op 1");   // the physical button works (opens from closed)
+  n += 3;
+  if (prof_ok) { send("profiled_state 1"); n++; }
   configuring = true;
-  zero_after_config = zero_closed;
+  zero_after_config = zero_closed && k > 0;
+  zero_k = k;
   last_cfg_ms = millis();
-  OUT.printf("# config: sending %d setup lines%s\n", kDoorConfigN, zero_closed ? ", then zero as closed" : "");
+  OUT.printf("# config: sending %d setup lines (profile: %s)%s\n", n,
+             prof_ok ? "stored" : "none stored, the STM uses its default margins until a calibration",
+             zero_after_config ? ", then zero as closed" : "");
 }
 
 static void onBoot() {
   stm_boots++;
-  // A reboot at the closed stall (auto_zero pass 14 reaching closed can brown the STM out)
-  // means the door is physically closed: say so, as inferred.
+  // A reboot at the closed stall (auto_zero pass 14 reaching closed can brown the STM out; the
+  // brain resets it there itself, calStall) means the door is physically closed: say so, as
+  // inferred. The zero needs the travel: the STM's own (a close near closed) or the Expected
+  // travel setting (calibration: the STM hadn't measured it yet).
   const stm::Status &s = P.st;
-  bool closed_stall = have_status && ((s.U == 0x14 && s.p > 12000) ||
-                                      (stm::phase(s.U) == stm::PH_CLOSING && s.p > -600));
+  int32_t k = 0;
+  pos_why = "STM rebooted";
+  if (have_status && s.U == 0x14) {
+    if (s_expected_travel <= 0) pos_why = "STM rebooted in calibration (closed not inferred: no Expected travel set)";
+    else if (s.p > CAL_END_FRAC * s_expected_travel) k = s_expected_travel;
+  } else if (have_status && stm::phase(s.U) == stm::PH_CLOSING && s.p > -600) {
+    k = s.K > 0 ? s.K : s_expected_travel;
+  }
+  bool closed_stall = k > 0;
   pos_know = closed_stall ? POS_INFERRED : POS_UNKNOWN;
-  pos_why = closed_stall ? "STM rebooted at the closed stall" : "STM rebooted";
+  if (closed_stall) pos_why = "STM rebooted at the closed stall";
   OUT.printf("# STM BOOT #%u (last U=%X p=%d): position %s\n", (unsigned)stm_boots, s.U, s.p,
              closed_stall ? "inferred CLOSED" : "UNKNOWN");
   if (calibrating) {
@@ -257,7 +327,8 @@ static void onBoot() {
   obstr_sent = false;  // the STM's flag restarts with it
   rev_keep = false;
   last_motion = "";
-  pushConfig(closed_stall);
+  prof_reading = false;
+  pushConfig(closed_stall, k);
 }
 
 // Close recorder state (functions further down, at "close recorder").
@@ -292,10 +363,11 @@ static void onCloseStarted() {
 
 static void onPhase(stm::DoorPhase np, int pos) {
   if (np == phase) return;
-  if (stm::moving(np) && !stm::moving(phase)) move_peak = cur_now;
+  if (stm::moving(np) && !stm::moving(phase)) { move_peak = cur_now; move_effort = -1; }
   if (!stm::moving(np) && stm::moving(phase)) {
     last_move_peak = move_peak;
-    OUT.printf("# move peak current %d\n", move_peak);
+    last_move_effort = move_effort;
+    OUT.printf("# move peak current %d; peak effort %d%% of the STM's limit\n", move_peak, move_effort);
   }
   OUT.printf("# door: %s -> %s (p=%d)\n", stm::phaseName(phase), stm::phaseName(np), pos);
   if (np == stm::PH_REVERSING) {
@@ -338,7 +410,8 @@ static void onStatus() {
     pos_why = cal_bad ? "calibration rejected" : "STM lost its zero";
   }
   // STM running but not set up (e.g. it restarted while we weren't listening): set it up.
-  if (!(s.Z & 2) && !configuring && !calibrating && millis() - last_cfg_ms > 30000) pushConfig(false);
+  // (Without a stored profile Z stays 0 until a calibration: nothing to resend.)
+  if (prof_ok && !(s.Z & 2) && !configuring && !calibrating && millis() - last_cfg_ms > 30000) pushConfig(false);
   if (calibrating && s.Z == 3 && !stm::moving(stm::phase(s.U)) && stm::phase(s.U) != stm::PH_UNKNOWN) {
     calibrating = false;
     float off = s_expected_travel > 0 ? fabsf((float)s.K - s_expected_travel) / s_expected_travel : 0;
@@ -353,21 +426,69 @@ static void onStatus() {
                  off * 100, (int)s_expected_travel, recal_tries, RECAL_MAX);
       if (recal_tries >= RECAL_MAX) raiseFault("calibration travel wrong " + String(recal_tries) + " times");
     } else {
-      OUT.printf("# calibration: done, K=%d p=%d%s\n", s.K, s.p, s_expected_travel > 0 ? " (travel as expected)" : "");
+      OUT.printf("# calibration: done, K=%d (%.1f in) p=%d%s\n", s.K, s.K / COUNTS_PER_INCH, s.p,
+                 s_expected_travel > 0 ? " (travel as expected)" : " (no Expected travel set: not checked)");
+      prof_want = true;  // the STM relearned its profile: keep a copy
     }
     calEnded();
   }
   onPhase(stm::phase(s.U), s.p);
 }
 
+static void profileRead() {
+  prof_reading = false;
+  if (!profValid(prof_new)) {
+    OUT.println("# profile: read-back from the STM not valid; not stored");
+    return;
+  }
+  bool same = !memcmp(prof_new, prof_tab, sizeof prof_tab) && prof_ok;
+  memcpy(prof_tab, prof_new, sizeof prof_tab);
+  prof_ok = true;
+  if (!same) saveProfile();
+  OUT.printf("# profile: read from the STM and %s (open[8]=%u close[8]=%u)\n", same ? "unchanged" : "stored",
+             prof_tab[0][8], prof_tab[1][8]);
+}
+
+// Start a profile read-back when one is wanted (after a good calibration; at start-up with none
+// stored and the STM profiled), with the door idle, the doorway clear and nothing queued.
+static void profPoll(uint32_t now) {
+  if (prof_reading && now - prof_read_ms >= PROF_READ_MS) {
+    prof_reading = false;
+    OUT.printf("# profile: read-back incomplete (%d open, %d close values); retry later\n", prof_cnt[0], prof_cnt[1]);
+    prof_want = true;
+  }
+  if (!prof_ok && !prof_reading && have_status && (P.st.Z & 2) && !calibrating && !cal_bad) prof_want = true;
+  if (!prof_want || prof_reading || !tx_on || !have_status || !q.empty() || configuring || calibrating || cal_bad)
+    return;
+  if (stm::moving(phase) || (phase != stm::PH_CLOSED && phase != stm::PH_OPEN) || !(P.st.Z & 2)) return;
+  if (!ge_ok || occupiedAny() || ge_last.present || close_pending || now - last_tx_ms < 2000) return;
+  static uint32_t last_try = 0;
+  if (last_try && now - last_try < 60000) return;
+  last_try = now;
+  prof_want = false;
+  send("get_profile");
+  OUT.println("# profile: reading the STM's learned profile (~7 s, nothing else sent meanwhile)");
+}
+
 static void handleStmByte(char c) {
   last_rx_ms = millis();
   if (!heard) { heard = true; attachTx(); }
-  switch (P.feed(c)) {
+  stm::Event ev = P.feed(c);
+  switch (ev) {
     case stm::STATUS: onStatus(); break;
     case stm::BOOT: onBoot(); break;
-    case stm::MOVE:
-      OUT.printf("# move: pos=%d -> state %X, current %X (limit %X)\n", P.mv.pos, P.mv.state, P.mv.current, P.mv.limit);
+    case stm::MOVE: {
+      int e = P.mv.limit > 0 ? (P.mv.current * 100 + P.mv.limit / 2) / P.mv.limit : -1;
+      OUT.printf("# move: pos=%d -> state %X, current %X (limit %X, effort %d%%)\n", P.mv.pos, P.mv.state, P.mv.current,
+                 P.mv.limit, e);
+      if (e >= 0) {
+        if (stm::moving(phase) && e > move_effort) {
+          move_effort = e;
+          last_effort_cur = P.mv.current;
+          last_effort_lim = P.mv.limit;
+        }
+        if (!stm::moving(phase)) move_effort = -1;  // a move starting: onPhase takes it from here
+      }
       // The move summary prints the moment the state changes; status lines lag up to 1.5 s.
       // Pseudo-states in the first summary line (1, 2, 3) map to unknown and are skipped.
       if (stm::phase(P.mv.state) != stm::PH_UNKNOWN) {
@@ -375,6 +496,15 @@ static void handleStmByte(char c) {
         onPhase(stm::phase(P.mv.state), P.mv.pos);
       }
       break;
+    }
+    case stm::PROF_OPEN:
+    case stm::PROF_CLOSE: {
+      int d = ev == stm::PROF_CLOSE;
+      if (!prof_reading || prof_cnt[d] >= PROF_N || (d && prof_cnt[0] < PROF_N)) break;
+      prof_new[d][prof_cnt[d]++] = (uint16_t)min(P.prof, 0xFFFF);
+      if (d && prof_cnt[1] == PROF_N) profileRead();
+      break;
+    }
     case stm::WIPED:
       OUT.println("# STM: calibration wiped by the button (~)");
       pos_know = POS_UNKNOWN;
@@ -778,6 +908,15 @@ static bool applySettings(const char *body, String &err) {
       etravel = lroundf(f);
       if (ok && etravel != 0 && etravel < 2000) { err = "expected_travel: 0 (no check) or 2000..40000"; ok = false; }
     }
+    else if (!strcmp(k, "expected_travel_inches")) {
+      ok = num(v, k, 0, 40000 / COUNTS_PER_INCH, f);
+      etravel = lroundf(f * COUNTS_PER_INCH);
+      if (ok && etravel != 0 && etravel < 2000) {
+        err = "expected_travel_inches: 0 (no check) or " + String(2000 / COUNTS_PER_INCH, 1) + ".." +
+              String(40000 / COUNTS_PER_INCH, 1);
+        ok = false;
+      }
+    }
     else if (!strcmp(k, "presence_threshold")) ok = num(v, k, 0.3f, 10, pres);
     else if (!strcmp(k, "occupied_threshold")) ok = num(v, k, 0.2f, 5, occ);
     else if (!strcmp(k, "noise_c")) ok = num(v, k, 0.2f, 2, noise);
@@ -892,6 +1031,12 @@ static void apiPoll() {
   sn.open_inches = openInches();
   sn.expected_travel = s_expected_travel;
   sn.travel = P.st.K;
+  sn.travel_inches = P.st.K > 0 ? roundf(P.st.K * 100.0f / COUNTS_PER_INCH) / 100.0f : -1;
+  sn.expected_travel_inches = roundf(s_expected_travel * 100.0f / COUNTS_PER_INCH) / 100.0f;
+  sn.last_move_effort = last_move_effort;
+  sn.effort_current = last_effort_cur;
+  sn.effort_limit = last_effort_lim;
+  sn.profile_stored = prof_ok;
   sn.motor_current = cur_now;
   sn.last_move_peak = last_move_peak;
   sn.presence_th = det.p.on_score;
@@ -978,18 +1123,22 @@ static void calEnded() {
 
 // auto_zero's first closing pass (0x14) on this kind of door never ends by itself: it reaches the
 // closed end and keeps pushing at reduced force (at install the STM browned out there; on
-// 2026-11-22 12:56-13:04 it pushed until reset). Near the closed end and not moving for 5 s means
-// it is at the closed stall: reset the STM, and onBoot's closed-stall rule zeroes it as closed.
+// 2026-11-22 12:56-13:04 it pushed until reset). Not moving for 5 s means it has stalled: reset the
+// STM; onBoot's closed-stall rule zeroes it as closed if that was the closed end.
 static void calStall(uint32_t now) {
-  static int last_p = 0;
+  static int last_p = 0, p0 = 0;
+  static bool in14 = false;
   static uint32_t still_since = 0;
   const stm::Status &s = P.st;
-  if (!calibrating || cur_U != 0x14) { still_since = 0; return; }
+  if (!calibrating || cur_U != 0x14) { still_since = 0; in14 = false; return; }
+  if (!in14) { in14 = true; p0 = s.p; }
   if (s.p != last_p) { last_p = s.p; still_since = now; return; }
   if (!still_since) still_since = now;
-  if (s.p > 12000 && now - still_since > 5000) {
+  // Still for 5 s after the pass has moved: stalled. onBoot decides whether that's the closed end
+  // (against the Expected travel); if not, the position stays unknown and the calibration is retried.
+  if (abs(s.p - p0) > 1000 && now - still_since > 5000) {
     still_since = 0;
-    OUT.printf("# calibration: closing pass stalled at the closed end (p=%d for 5 s): STM reset ends it\n", s.p);
+    OUT.printf("# calibration: closing pass stalled (p=%d for 5 s): STM reset ends it\n", s.p);
     stmReset("calibration at the closed stall");
   }
 }
@@ -1018,6 +1167,7 @@ static void supervise() {
   uint32_t now = millis();
   recoverPosition(now);
   calStall(now);
+  profPoll(now);
   if (close_pending) {
     if (fault) cancelPendingClose("fault");
     else if (phase != stm::PH_OPEN) cancelPendingClose(stm::phaseName(phase));
@@ -1049,6 +1199,7 @@ static void supervise() {
   if (configuring && q.empty() && now - last_tx_ms > 1000) {
     configuring = false;
     if (zero_after_config) {
+      send(String("set_dooroffset ") + zero_k);
       send("zero -72 14");
       zero_inferred = true;
       OUT.println("# config: done; zero as closed (inferred)");
@@ -1135,7 +1286,7 @@ static void printStatus() {
 static void help() {
   OUT.println("# wayzn-brain. cmds: status | open | close | stop | cal | auto on|off | hold <s>");
   OUT.println("#   ge (frame + deltas) | ge on|off (stream) | ge raw on|off (all frames) | on <score> | off <score> | noise <C> | mask <hex64> | gebg (relearn)");
-  OUT.println("#   fault clear | cfg (resend setup) | sreset | log on|off | raw <stm line> (expert)");
+  OUT.println("#   fault clear | cfg (resend setup) | profile [read] | sreset | log on|off | raw <stm line> (expert)");
   printStatus();
 }
 
@@ -1178,6 +1329,17 @@ static void command(String c) {
   else if (c == "gebg") { det.reset(); det2.reset(); OUT.println("# grid-eye: both detectors relearning background (2 s): doorway must be clear"); }
   else if (c == "fault clear") clearFault("console");
   else if (c == "cfg") pushConfig(false);
+  else if (c == "profile") {
+    OUT.printf("# profile: %s", prof_ok ? "stored" : "none stored");
+    if (prof_ok) {
+      OUT.print("\n# open: ");
+      for (int i = 0; i < PROF_N; i++) OUT.printf("%u ", prof_tab[0][i]);
+      OUT.print("\n# close: ");
+      for (int i = 0; i < PROF_N; i++) OUT.printf("%u ", prof_tab[1][i]);
+    }
+    OUT.println();
+  }
+  else if (c == "profile read") { prof_want = true; OUT.println("# profile: read-back requested (door idle, doorway clear)"); }
   else if (c == "sreset") stmReset("command");
   else if (c == "log on" || c == "log off") s_log = c == "log on";
   else if (c.startsWith("raw ")) send(c.substring(4));

@@ -7,7 +7,6 @@ its shell and reads the Grid-EYE. Principles: AGENTS.md. STM details: docs/STM-F
 - `src/presence.h`: Grid-EYE presence detector (learned background, warming only, mask).
 - `src/presence2.h`: v2 Grid-EYE detector (see below).
 - `src/api.h`: HTTP API for Home Assistant (docs/API.md).
-- `src/door_config.h`: generated from `door-config/` by `tools/gen_door_config.py`.
 - `src/main.cpp`: supervisor, safety, console. `src/net.h`: Wi-Fi console + OTA.
 - `test/host_test.cpp`: host unit tests, plus a replay of UART captures through the parser and
   detector (no hardware). Build and run from this directory:
@@ -53,8 +52,16 @@ Behaviour:
   the end. The measured travel is checked against `expected_travel` (a setting, from HA; 2 %);
   a wrong one is rejected and the calibration retried. 3 failures latch a fault (door open).
   auto_zero's first closing pass doesn't end by itself at the closed end (it keeps pushing at
-  reduced force, or browns the STM out): near the closed end and still for 5 s, the brain resets
-  the STM, which is then zeroed as closed. A calibration timeout resets the STM and opens.
+  reduced force, or browns the STM out): still for 5 s, the brain resets the STM. A reboot in that
+  pass past 85 % of `expected_travel` is the closed end: zeroed as closed with that travel
+  (inferred); otherwise (or with no `expected_travel`) the position stays unknown and the
+  calibration is retried. A calibration timeout resets the STM and opens.
+- No door constants in the firmware. STM setup after every STM boot: the learned effort profile
+  (read back with `get_profile` after each good calibration, kept in NVS; none stored = the STM's
+  default margins), the open position, `set_open_wait 15`, `set_button_op 1`, `profiled_state 1`.
+  The travel comes from the STM's own measurement, or `expected_travel` for an inferred zero.
+- Effort: each STM move summary gives the current and the STM's current limit at that moment;
+  `last_move_effort` is the highest current/limit (%) of a move.
 - No OTA while the door is moving.
 - Detection: the doorway is occupied (no closing; a close reverses) if either the original detector
   (`src/presence.h`) or v2 (`src/presence2.h`, docs/DETECTION-RESEARCH.md) says so. Presence (auto-open)

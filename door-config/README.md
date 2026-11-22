@@ -12,8 +12,9 @@ imp. Every door learns its own profile: read yours with `get_profile` (or relear
   `zero -72 14` if closed and engaged, `zero -6136 15` if at the open position. The STM only
   knows the position it's given. If unsure, use `auto_zero` (moves the full travel, relearns
   the profile). See [docs/STM-FIRMWARE.md](../docs/STM-FIRMWARE.md).
-  `firmware/brain/tools/gen_door_config.py` turns this file into
-  `firmware/brain/src/door_config.h`.
 - The imp's settings for this door: `set_open_to -6136` (8 in), `set_dooroffset 13588`,
   `set_open_wait -1`, `set_button_op 1`. This file uses `set_open_wait 15` (unused: the brain
   closes the door itself) and `set_button_op 1` (the physical button opens from closed).
+- Record only: the brain no longer sends this file. It keeps the profile the STM learns in a
+  calibration (read back with `get_profile`) and takes the travel from the STM or from the
+  `expected_travel` setting; see [firmware/brain/README.md](../firmware/brain/README.md).

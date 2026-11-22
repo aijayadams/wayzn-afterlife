@@ -35,6 +35,9 @@ struct Snapshot {
   uint32_t hold_s = 15;
   int open_counts = 0, expected_travel = 0, travel = 0;
   int motor_current = 0, last_move_peak = -1;
+  int last_move_effort = -1, effort_current = 0, effort_limit = 0;  // % of the STM's limit; -1 = none yet
+  float travel_inches = -1, expected_travel_inches = 0;
+  bool profile_stored = false;
   float open_percent = 0, open_inches = 0, presence_th = 0, occupied_th = 0, noise_c = 0;
   int p = 0;
   uint32_t status_age_ms = 0xFFFFFFFF;
@@ -108,21 +111,23 @@ static void handleStatus() {
   portENTER_CRITICAL(&mux);
   s = snap;
   portEXIT_CRITICAL(&mux);
-  char b[900];
+  char b[1200];
   snprintf(b, sizeof b,
            "{\"state\":\"%s\",\"detail\":\"%s\",\"position\":\"%s\",\"p\":%d,\"fault\":%s%s%s,"
            "\"presence\":%s,\"occupied\":%s,\"presence_age_ms\":%ld,\"occupied_age_ms\":%ld,\"auto\":%s,\"hold\":%s,\"close_pending\":%s,\"grideye_ok\":%s,"
            "\"status_age_ms\":%lu,\"uptime_s\":%lu,\"motor_current\":%d,\"last_move_peak_current\":%d,\"travel_counts\":%d,"
+           "\"travel_inches\":%.2f,\"last_move_effort\":%d,\"effort_current\":%d,\"effort_limit\":%d,\"profile_stored\":%s,"
            "\"settings\":{\"auto_open\":%s,\"auto_close\":%s,\"obstruction_detection\":%s,\"hold_s\":%lu,"
-           "\"open_percent\":%.1f,\"open_inches\":%.1f,\"open_counts\":%d,\"expected_travel\":%d,\"presence_threshold\":%.2f,\"occupied_threshold\":%.2f,"
+           "\"open_percent\":%.1f,\"open_inches\":%.1f,\"open_counts\":%d,\"expected_travel\":%d,\"expected_travel_inches\":%.2f,\"presence_threshold\":%.2f,\"occupied_threshold\":%.2f,"
            "\"noise_c\":%.2f}}",
            s.state, s.detail, s.position, s.p, s.fault[0] ? "\"" : "", s.fault[0] ? jsonEscape(s.fault).c_str() : "null",
            s.fault[0] ? "\"" : "", s.presence ? "true" : "false", s.occupied ? "true" : "false", (long)s.presence_age_ms, (long)s.occupied_age_ms,
            s.auto_mode ? "true" : "false", s.hold ? "true" : "false", s.close_pending ? "true" : "false",
            s.grideye_ok ? "true" : "false",
            (unsigned long)s.status_age_ms, (unsigned long)s.uptime_s, s.motor_current, s.last_move_peak, s.travel,
+           s.travel_inches, s.last_move_effort, s.effort_current, s.effort_limit, s.profile_stored ? "true" : "false",
            s.auto_mode ? "true" : "false", s.auto_close ? "true" : "false", s.obst ? "true" : "false",
-           (unsigned long)s.hold_s, s.open_percent, s.open_inches, s.open_counts, s.expected_travel, s.presence_th, s.occupied_th, s.noise_c);
+           (unsigned long)s.hold_s, s.open_percent, s.open_inches, s.open_counts, s.expected_travel, s.expected_travel_inches, s.presence_th, s.occupied_th, s.noise_c);
   web->send(200, "application/json", b);
 }
 
