@@ -44,6 +44,12 @@ static bool s_obst = true;       // Grid-EYE obstruction detection: blocks closi
 static uint32_t s_hold_s = 15;   // close this long after the doorway is clear
 static constexpr int32_t TRAVEL_COUNTS = 13588;  // full travel (set_dooroffset), for open_percent
 static int32_t s_open_counts = -6136;            // set_open_to (8 in = 45.2 %)
+// Motor current cap: the STM's `limit` sets the DRV8828's hardware current regulation (STM
+// firmware FUN_080027fc, default 1030 at boot, clamped to 3022). This setting can only lower it.
+static constexpr int STM_LIMIT_DEFAULT = 1030;
+static constexpr int CURRENT_CAP_MIN = 400;
+static int s_current_cap = STM_LIMIT_DEFAULT;
+static bool cap_overridden = false;   // fault: full limit restored so the door can always open
 static constexpr float COUNTS_PER_INCH = 767.0f; // the imp's set_open_to mapping (8 in = -6136, 12 in = -9204)
 static bool s_log = false;       // print every STM status line
 
@@ -54,6 +60,7 @@ static void loadSettings(ge::Detector &d) {
   s_auto_close = prefs.getBool("aclose", true);
   s_obst = prefs.getBool("obst", true);
   s_open_counts = prefs.getInt("opento", -6136);
+  s_current_cap = prefs.getInt("ccap", STM_LIMIT_DEFAULT);
   d.p.occ_on = prefs.getFloat("occ", 0.6f);
   d.p.occ_off = d.p.occ_on * 0.58f;
   d.p.on_score = prefs.getFloat("on2", 1.0f);
@@ -67,6 +74,7 @@ static void saveSettings(const ge::Detector &d) {
   prefs.putBool("aclose", s_auto_close);
   prefs.putBool("obst", s_obst);
   prefs.putInt("opento", s_open_counts);
+  prefs.putInt("ccap", s_current_cap);
   prefs.putFloat("occ", d.p.occ_on);
   prefs.putFloat("on2", d.p.on_score);
   prefs.putFloat("off2", d.p.off_score);
@@ -144,6 +152,8 @@ static float frame[64];
 static bool ge_ok = false, ge_stream = false, ge_raw = false;
 static uint32_t ge_fail = 0, last_presence_ms = 0, last_occupied_ms = 0, last_ge_ms = 0;
 static bool obstr_sent = false;   // what we last told the STM
+static int cur_now = 0, move_peak = 0, last_move_peak = -1;  // motor current (STM units: H / `c`)
+static uint32_t cur_poll_ms = 0;
 static String last_motion;        // last motion command sent (see motion())
 static uint32_t last_motion_ms = 0;
 static uint32_t obstr_ms = 0;
@@ -154,6 +164,7 @@ static void requestOpen(const char *why);
 static void pushConfig(bool zero_closed) {
   for (int i = 0; i < kDoorConfigN; i++) send(kDoorConfig[i]);
   send(String("set_open_to ") + s_open_counts);  // the saved setting overrides door_config.h
+  send(String("limit ") + (cap_overridden ? STM_LIMIT_DEFAULT : s_current_cap));
   configuring = true;
   zero_after_config = zero_closed;
   last_cfg_ms = millis();
@@ -185,6 +196,11 @@ static void onBoot() {
 
 static void onPhase(stm::DoorPhase np, int pos) {
   if (np == phase) return;
+  if (stm::moving(np) && !stm::moving(phase)) move_peak = cur_now;
+  if (!stm::moving(np) && stm::moving(phase)) {
+    last_move_peak = move_peak;
+    OUT.printf("# move peak current %d (cap %d)\n", move_peak, cap_overridden ? STM_LIMIT_DEFAULT : s_current_cap);
+  }
   OUT.printf("# door: %s -> %s (p=%d)\n", stm::phaseName(phase), stm::phaseName(np), pos);
   if (np == stm::PH_REVERSING) {
     uint32_t now = millis();
@@ -203,6 +219,8 @@ static void onPhase(stm::DoorPhase np, int pos) {
 static void onStatus() {
   const stm::Status &s = P.st;
   have_status = true;
+  cur_now = s.H;
+  if (stm::moving(stm::phase(s.U)) && cur_now > move_peak) move_peak = cur_now;
   last_status_ms = millis();
   if (s_log) OUT.printf("# st U=%X Z=%d dest=%d H=%X p=%d K=%d\n", s.U, s.Z, s.dest, s.H, s.p, s.K);
   if (s.Z & 1) {
@@ -241,7 +259,10 @@ static void handleStmByte(char c) {
       pos_why = "calibration wiped (button)";
       pushConfig(false);
       break;
-    case stm::REPLY:
+    case stm::REPLY:  // only `c` (motor current) is queried automatically
+      cur_now = P.reply;
+      if (stm::moving(phase) && cur_now > move_peak) move_peak = cur_now;
+      break;
     default: break;
   }
 }
@@ -279,6 +300,12 @@ static void raiseFault(const String &why) {
   if (!fault) OUT.printf("# FAULT: %s -> latching OPEN; `fault clear` to resume\n", why.c_str());
   fault = true;
   fault_why = why;
+  if (s_current_cap < STM_LIMIT_DEFAULT && !cap_overridden) {
+    // A cap set too low must never stop the door failing open.
+    cap_overridden = true;
+    send(String("limit ") + STM_LIMIT_DEFAULT, true);
+    OUT.printf("# current cap %d lifted to %d until the fault is cleared\n", s_current_cap, STM_LIMIT_DEFAULT);
+  }
   requestOpen("fault");
 }
 
@@ -433,6 +460,7 @@ static bool applySettings(const char *body, String &err) {
   uint32_t hold = s_hold_s;
   int32_t open_counts = s_open_counts;
   float pres = det.p.on_score, occ = det.p.occ_on, noise = det.p.noise_c;
+  int cap = s_current_cap;
   auto num = [&](JsonVariant v, const char *k, float lo, float hi, float &out) {
     if (!v.is<float>() && !v.is<int>()) { err = String(k) + " must be a number"; return false; }
     float f = v.as<float>();
@@ -460,6 +488,7 @@ static bool applySettings(const char *body, String &err) {
       open_counts = -lroundf(f * COUNTS_PER_INCH);
     }
     else if (!strcmp(k, "open_counts")) { ok = num(v, k, -0.95f * TRAVEL_COUNTS, -0.15f * TRAVEL_COUNTS, f); open_counts = lroundf(f); }
+    else if (!strcmp(k, "current_cap")) { ok = num(v, k, CURRENT_CAP_MIN, STM_LIMIT_DEFAULT, f); cap = (int)lroundf(f); }
     else if (!strcmp(k, "presence_threshold")) ok = num(v, k, 0.3f, 10, pres);
     else if (!strcmp(k, "occupied_threshold")) ok = num(v, k, 0.2f, 5, occ);
     else if (!strcmp(k, "noise_c")) ok = num(v, k, 0.2f, 2, noise);
@@ -479,6 +508,10 @@ static bool applySettings(const char *body, String &err) {
   logChange("presence_threshold", String(det.p.on_score, 2), String(pres, 2));
   logChange("occupied_threshold", String(det.p.occ_on, 2), String(occ, 2));
   logChange("noise_c", String(det.p.noise_c, 2), String(noise, 2));
+  logChange("current_cap", String(s_current_cap), String(cap));
+  bool cap_changed = cap != s_current_cap;
+  s_current_cap = cap;
+  if (cap_changed && tx_on && !cap_overridden) send(String("limit ") + s_current_cap);
   if (s_obst && !obst) OUT.println("# WARNING: obstruction detection OFF: only the STM's current limit stops a close");
   bool open_changed = open_counts != s_open_counts;
   s_auto = auto_open; s_auto_close = auto_close; s_obst = obst; s_hold_s = hold; s_open_counts = open_counts;
@@ -561,6 +594,10 @@ static void apiPoll() {
   sn.open_counts = s_open_counts;
   sn.open_percent = openPercent();
   sn.open_inches = openInches();
+  sn.current_cap = s_current_cap;
+  sn.cap_in_force = cap_overridden ? STM_LIMIT_DEFAULT : s_current_cap;
+  sn.motor_current = cur_now;
+  sn.last_move_peak = last_move_peak;
   sn.presence_th = det.p.on_score;
   sn.occupied_th = det.p.occ_on;
   sn.noise_c = det.p.noise_c;
@@ -579,6 +616,11 @@ static void supervise() {
   if (!heard && now - boot_ms > 25000 && stm_resets == 0) stmReset("no STM output since ESP boot");
   if (heard && now - last_rx_ms > SILENT_RESET_MS && now - last_rst_ms > 60000) stmReset("STM silent 30 s");
   if (tx_on && now - last_tx_ms > KEEPALIVE_MS && q.empty()) send("c");
+  // While moving, sample the motor current ~4x/s for the move's peak (status lines are 1.5 s apart).
+  if (tx_on && stm::moving(phase) && q.empty() && now - cur_poll_ms >= 250) {
+    send("c");
+    cur_poll_ms = now;
+  }
   if (configuring && q.empty() && now - last_tx_ms > 1000) {
     configuring = false;
     if (zero_after_config) {
@@ -593,10 +635,11 @@ static void supervise() {
   if (now - hb >= 30000) {
     hb = now;
     OUT.printf("# hb door=%s pos=%s p=%d presence=%d occupied=%d score=%.2f auto=%d fault=%d | v2 presence=%d "
-               "occupied=%d score=%.2f peak=%.2f would_block=%u would_reverse=%u\n",
+               "occupied=%d score=%.2f peak=%.2f would_block=%u would_reverse=%u | current %d cap %d\n",
                stm::phaseName(phase), pos_know == POS_KNOWN ? "known" : pos_know == POS_INFERRED ? "inferred" : "unknown",
                P.st.p, ge_last.present, ge_last.occupied, ge_last.smoothed, s_auto, fault, g2.present, g2.occupied,
-               g2.score, g2.peak, (unsigned)g2_would_block, (unsigned)g2_would_reverse);
+               g2.score, g2.peak, (unsigned)g2_would_block, (unsigned)g2_would_reverse, cur_now,
+               cap_overridden ? STM_LIMIT_DEFAULT : s_current_cap);
   }
   if (stm::moving(phase)) {
     uint32_t lim = phase == stm::PH_CALIBRATING ? CAL_TIMEOUT_MS : MOVE_TIMEOUT_MS;
@@ -685,7 +728,11 @@ static void command(String c) {
   else if (c == "ge on" || c == "ge off") ge_stream = c == "ge on";
   else if (c == "ge raw on" || c == "ge raw off") ge_raw = c == "ge raw on";
   else if (c == "gebg") { det.reset(); OUT.println("# grid-eye: relearning background (2 s)"); }
-  else if (c == "fault clear") { fault = false; fault_why = ""; n_rev = 0; OUT.println("# fault cleared"); }
+  else if (c == "fault clear") {
+    fault = false; fault_why = ""; n_rev = 0;
+    if (cap_overridden) { cap_overridden = false; send(String("limit ") + s_current_cap); }
+    OUT.println("# fault cleared");
+  }
   else if (c == "cfg") pushConfig(false);
   else if (c == "sreset") stmReset("command");
   else if (c == "log on" || c == "log off") s_log = c == "log on";

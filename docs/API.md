@@ -37,6 +37,8 @@ Commands are acknowledged in ~0.1-0.2 s (measured); the move itself takes ~5-8 s
 - `fault`: `null` or the latched fault (the door is then held open).
 - `presence` (someone wants out), `occupied` (doorway not clear; blocks closing), `auto`
   (local Grid-EYE auto-open/close), `hold` (opened by HA, held), `grideye_ok`.
+- `motor_current`: live motor current (STM32 units; ~30 at rest). `last_move_peak_current`: peak of the
+  last move (-1 until a move). `current_cap_in_force`: the cap currently sent to the motor driver.
 - `status_age_ms`: age of the last STM status line. `uptime_s`: ESP32 uptime.
 - `settings`: the current settings, below.
 
@@ -54,5 +56,6 @@ Commands are acknowledged in ~0.1-0.2 s (measured); the move itself takes ~5-8 s
 | `presence_threshold` | 0.3..10 | detector score that means "a dog wants out" (lower = more sensitive) |
 | `occupied_threshold` | 0.2..5, <= presence | the safety level: doorway not clear |
 | `noise_c` | 0.2..2 | per-pixel noise floor (°C) for the score |
+| `current_cap` | 400..1030 | the motor driver's current cap (strength), in the STM32's own units; 1030 is the original setting and the most allowed. Lifted back to 1030 while a fault is latched, so the door can always open |
 
 Console only (`nc wayzn-esp.local 23`): calibration, fault clear, raw STM commands.

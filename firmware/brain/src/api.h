@@ -33,6 +33,7 @@ struct Snapshot {
   bool auto_close = true, obst = true;
   uint32_t hold_s = 15;
   int open_counts = 0;
+  int current_cap = 0, cap_in_force = 0, motor_current = 0, last_move_peak = -1;
   float open_percent = 0, open_inches = 0, presence_th = 0, occupied_th = 0, noise_c = 0;
   int p = 0;
   uint32_t status_age_ms = 0xFFFFFFFF;
@@ -100,16 +101,17 @@ static void handleStatus() {
   snprintf(b, sizeof b,
            "{\"state\":\"%s\",\"detail\":\"%s\",\"position\":\"%s\",\"p\":%d,\"fault\":%s%s%s,"
            "\"presence\":%s,\"occupied\":%s,\"auto\":%s,\"hold\":%s,\"grideye_ok\":%s,"
-           "\"status_age_ms\":%lu,\"uptime_s\":%lu,"
+           "\"status_age_ms\":%lu,\"uptime_s\":%lu,\"motor_current\":%d,\"last_move_peak_current\":%d,"
+           "\"current_cap_in_force\":%d,"
            "\"settings\":{\"auto_open\":%s,\"auto_close\":%s,\"obstruction_detection\":%s,\"hold_s\":%lu,"
            "\"open_percent\":%.1f,\"open_inches\":%.1f,\"open_counts\":%d,\"presence_threshold\":%.2f,\"occupied_threshold\":%.2f,"
-           "\"noise_c\":%.2f}}",
+           "\"noise_c\":%.2f,\"current_cap\":%d}}",
            s.state, s.detail, s.position, s.p, s.fault[0] ? "\"" : "", s.fault[0] ? jsonEscape(s.fault).c_str() : "null",
            s.fault[0] ? "\"" : "", s.presence ? "true" : "false", s.occupied ? "true" : "false",
            s.auto_mode ? "true" : "false", s.hold ? "true" : "false", s.grideye_ok ? "true" : "false",
-           (unsigned long)s.status_age_ms, (unsigned long)s.uptime_s,
+           (unsigned long)s.status_age_ms, (unsigned long)s.uptime_s, s.motor_current, s.last_move_peak, s.cap_in_force,
            s.auto_mode ? "true" : "false", s.auto_close ? "true" : "false", s.obst ? "true" : "false",
-           (unsigned long)s.hold_s, s.open_percent, s.open_inches, s.open_counts, s.presence_th, s.occupied_th, s.noise_c);
+           (unsigned long)s.hold_s, s.open_percent, s.open_inches, s.open_counts, s.presence_th, s.occupied_th, s.noise_c, s.current_cap);
   web->send(200, "application/json", b);
 }
 
