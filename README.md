@@ -56,9 +56,6 @@ If you're comfortable soldering a few wires to small pads, this is an evening's 
    [local API](docs/API.md). For Home Assistant, the `wayzn` integration's local mode
    ([aijayadams/wayzn](https://github.com/aijayadams/wayzn)) talks to it.
 
-Never connect the ESP32's USB while its 3V3 wire is connected, and strain-relieve the
-wires: they're small and run next to the motor.
-
 ## Go deeper
 
 | | |
