@@ -47,6 +47,9 @@ Behaviour:
 - Grid-EYE returning 20 identical frames counts as not reading.
 - Telnet console: the first line must be `auth <api_token>`; anything else disconnects.
 - Open with unknown position uses `disengage` (always drives fully open).
+- Position recovery: when the STM has no position after a start (power cut, STM reboot), the
+  brain runs `auto_zero` itself once the doorway has been clear 10 s (aborted if anything enters
+  the doorway; retried after 3 min). 3 failures in a row latch a fault (door open).
 - No OTA while the door is moving.
 - Detection: the doorway is occupied (no closing; a close reverses) if either the original detector
   (`src/presence.h`) or v2 (`src/presence2.h`, docs/DETECTION-RESEARCH.md) says so. Presence (auto-open)

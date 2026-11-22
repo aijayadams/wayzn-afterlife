@@ -121,6 +121,13 @@ static uint32_t phase_since = 0;
 static bool configuring = false, zero_after_config = false, zero_inferred = false;
 static uint32_t last_cfg_ms = 0;
 static bool calibrating = false;
+// Position recovery: after a start (power cut, STM reboot) the STM has no position. The brain
+// runs its auto_zero by itself once the doorway has been clear 10 s; an aborted or failed run is
+// retried after 3 min; 3 failures in a row latch a fault (door open, HA alerted).
+static constexpr int RECAL_MAX = 3;
+static constexpr uint32_t RECAL_CLEAR_MS = 10000, RECAL_RETRY_MS = 180000;
+static int recal_tries = 0;
+static uint32_t recal_next = 0;
 static uint32_t cal_start = 0;
 static bool fault = false;
 static String fault_why;
@@ -234,7 +241,8 @@ static void onBoot() {
     calibrating = false;
     OUT.printf("# calibration: %s\n", closed_stall ? "reached closed (STM rebooted at the stall)"
                                                    : "FAILED: STM rebooted mid-run");
-    if (!closed_stall) raiseFault("calibration failed");
+    if (!closed_stall && recal_tries >= RECAL_MAX) raiseFault("calibration failed " + String(recal_tries) + " times");
+    else if (!closed_stall) OUT.printf("# calibration: will retry (%d/%d so far)\n", recal_tries, RECAL_MAX);
   }
   q.clear();
   obstr_sent = false;  // the STM's flag restarts with it
@@ -410,6 +418,10 @@ static void cancelPendingClose(const char *why) {
 
 static void requestOpen(const char *why, bool force) {
   cancelPendingClose(why);
+  if (calibrating) {  // an open wins; recoverPosition() retries the calibration later
+    calibrating = false;
+    OUT.printf("# calibration interrupted by an open (%s)\n", why);
+  }
   // Presence during a reversal is what blocked the close, not a request to stay open: once the
   // doorway is clear the close continues. Only an explicit open (HA, console) or a fault keeps it.
   if (obstr_sent && !rev_keep && phase != stm::PH_CLOSED && strcmp(why, "presence") != 0) {
@@ -904,8 +916,40 @@ static void restoreRtcState() {
              fault ? fault_why.c_str() : "none", obstr_sent, rev_keep, rtc_st.bg_ok ? "yes" : "no");
 }
 
+static void startCal(const char *why) {
+  send("clear_obstruction");
+  send("reset_zero");
+  motion("auto_zero", why, true);
+  obstr_sent = rev_keep = false;
+  calibrating = true;
+  cal_start = millis();
+  zero_inferred = false;
+  OUT.printf("# calibration (%s): auto_zero started (retracts fully, then closes; ~90 s)\n", why);
+}
+
+static void recoverPosition(uint32_t now) {
+  if (pos_know == POS_KNOWN) { recal_tries = 0; recal_next = 0; return; }
+  if (!tx_on || !have_status || configuring || calibrating || fault || stm::moving(phase)) return;
+  if (pos_know != POS_UNKNOWN) return;  // inferred: the zero is on its way after setup
+  if (!recal_next) {
+    recal_next = now + RECAL_CLEAR_MS;
+    OUT.println("# position unknown: automatic calibration once the doorway has been clear 10 s");
+  }
+  bool clear = ge_ok && det.ready && det2.ready && !occupiedAny() && !ge_last.present &&
+               now - last_occupied_ms >= RECAL_CLEAR_MS;
+  if (now < recal_next || !clear) return;
+  if (recal_tries >= RECAL_MAX) {
+    raiseFault("position unknown: automatic calibration failed " + String(recal_tries) + " times");
+    return;
+  }
+  recal_tries++;
+  recal_next = now + RECAL_RETRY_MS;
+  startCal(recal_tries == 1 ? "position unknown after a start" : "position unknown, retry");
+}
+
 static void supervise() {
   uint32_t now = millis();
+  recoverPosition(now);
   if (close_pending) {
     if (fault) cancelPendingClose("fault");
     else if (phase != stm::PH_OPEN) cancelPendingClose(stm::phaseName(phase));
@@ -1042,11 +1086,7 @@ static void command(String c) {
   else if (c == "cal") {
     if (ge_last.present || occupiedAny() || !ge_ok) OUT.println("# cal refused: doorway not clear / Grid-EYE not reading");
     else if (configuring) OUT.println("# cal refused: still configuring");
-    else {
-      send("clear_obstruction"); send("reset_zero"); motion("auto_zero", "calibration");
-      calibrating = true; cal_start = millis(); zero_inferred = false;
-      OUT.println("# calibration: auto_zero started (retracts fully, then closes; ~90 s)");
-    }
+    else startCal("command");
   }
   else if (c == "auto on" || c == "auto off") { s_auto = c == "auto on"; saveSettings(det); printStatus(); }
   else if (c.startsWith("hold ")) { s_hold_s = max(3L, c.substring(5).toInt()); saveSettings(det); printStatus(); }
