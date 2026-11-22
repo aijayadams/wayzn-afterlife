@@ -145,6 +145,18 @@ static ge::Result ge_last;
 // v2 detector in SHADOW MODE (docs/DETECTION-RESEARCH.md stage 1): fed the same frames, it only
 // logs its decisions and where it would have differed. Nothing here acts on it.
 static ge2::Detector det2;
+// v2's closed-door snapshot survives software resets (OTA, crash) in RTC memory, so a reboot
+// while the door is open doesn't turn the post-close warm-up into a false obstruction.
+struct RtcRef { uint32_t magic; float ref[64]; uint32_t sum; };
+RTC_NOINIT_ATTR static RtcRef rtc_ref;
+static constexpr uint32_t RTC_REF_MAGIC = 0x57524546;  // "WREF"
+static uint32_t rtcRefSum(const RtcRef &r) {
+  uint32_t h = 2166136261u;
+  const uint8_t *b = (const uint8_t *)r.ref;
+  for (size_t i = 0; i < sizeof r.ref; i++) h = (h ^ b[i]) * 16777619u;
+  return h;
+}
+static uint32_t ref_seq_saved = 0;
 static ge2::Result g2;
 static uint32_t g2_occ_since = 0, g2_pres_since = 0, g2_would_block = 0, g2_would_reverse = 0;
 // Stage 2 (docs/DETECTION-RESEARCH.md): the doorway counts as occupied if EITHER detector says so.
@@ -439,7 +451,13 @@ static void captureShip() {
 
 static void shadow() {
   bool wasP = g2.present, wasO = g2.occupied;
-  g2 = det2.update(frame, phase == stm::PH_CLOSED);
+  g2 = det2.update(frame, phase == stm::PH_CLOSED, phase != stm::PH_UNKNOWN);
+  if (det2.refSeq() != ref_seq_saved) {
+    ref_seq_saved = det2.refSeq();
+    memcpy(rtc_ref.ref, det2.refData(), sizeof rtc_ref.ref);
+    rtc_ref.sum = rtcRefSum(rtc_ref);
+    rtc_ref.magic = RTC_REF_MAGIC;
+  }
   uint32_t now = millis();
   auto cell = [](int i) { return i < 0 ? String("-") : "r" + String(i / 8) + "c" + String(i % 8); };
   if (g2.occupied != wasO) {
@@ -858,6 +876,15 @@ static void feed(String &buf, char ch) {
 }
 
 // ---------- main ----------
+static void restoreV2Ref() {
+  if (rtc_ref.magic == RTC_REF_MAGIC && rtc_ref.sum == rtcRefSum(rtc_ref)) {
+    det2.loadRef(rtc_ref.ref);
+    OUT.println("# v2: closed-door snapshot restored from RTC memory");
+  } else {
+    OUT.println("# v2: no closed-door snapshot in RTC memory; a close before the door next opens uses slow-warming follow");
+  }
+}
+
 void setup() {
   // NRST first: open-drain, released, input on so we can read the real level.
   gpio_set_level((gpio_num_t)PIN_STM_RST, 1);
@@ -868,6 +895,7 @@ void setup() {
   net::on_up = api::begin;
   net::on_poll = api::poll;
   net::begin(nullptr);
+  restoreV2Ref();
   Stm.setRxBufferSize(4096);
   Stm.begin(115200, SERIAL_8N1, PIN_STM_RX, -1);  // TX attached once the STM is heard
   Wire.begin(PIN_SDA, PIN_SCL, 100000);

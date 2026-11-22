@@ -56,6 +56,7 @@ struct Params {
   float cool_clamp = 0.3f;      // bg may sit at most this far above the smoothed scene
   float recover = 0.01f;        // after a close: bg back toward the pre-open bg, per frame
   int recover_frames = 1800;    // for at most 3 min after the door closed
+  float noref_rate = 0.002f;    // no snapshot (power cut while open): bg follows warming at most this per frame
   float noise_ref = 0.26f;      // reference pixel noise (C); pixels are normalised to it
   float var_rate = 0.0005f;     // noise learning rate (frame-difference variance), while clear
   float w[64];                  // presence weights 0..1 (row-major, register 0x80 order)
@@ -98,12 +99,21 @@ class Detector {
 
   void reset() {
     ready = false; n_ = 0; have_prev_ = false; have_ref_ = false; was_closed_ = true;
-    rec_left_ = 0; present_ = occupied_ = false; on_run_ = off_run_ = occ_clear_ = 0;
+    rec_left_ = noref_left_ = 0; known_ = false; present_ = occupied_ = false; on_run_ = off_run_ = occ_clear_ = 0;
     for (int i = 0; i < 64; i++) { s[i] = 0; var[i] = p.noise_ref * p.noise_ref; }
   }
 
-  // One frame (deg C) and whether the door is known closed. Unknown door state: pass false.
-  Result update(const float t[64], bool door_closed) {
+  // The closed-door snapshot (taken when the door starts to open), so a caller can keep it across
+  // a reboot. refSeq() changes each time a new one is taken.
+  bool hasRef() const { return have_ref_; }
+  const float *refData() const { return ref; }
+  uint32_t refSeq() const { return ref_seq_; }
+  void loadRef(const float r[64]) { memcpy(ref, r, sizeof ref); have_ref_ = true; }
+
+  // One frame (deg C), whether the door is closed, and whether the door state is known at all.
+  // Door transitions count only between known states, and not until the first known state after a
+  // reset, so a snapshot is never taken of an open door.
+  Result update(const float t[64], bool door_closed, bool door_known = true) {
     Result r;
     if (!ready) {
       for (int i = 0; i < 64; i++) bg[i] = n_ ? bg[i] + (t[i] - bg[i]) / (n_ + 1) : t[i];
@@ -140,9 +150,17 @@ class Detector {
     } else occ_clear_ = 0;
     if (present_) occupied_ = true;
     // [3] remember the closed-door background when the door starts to open
-    if (was_closed_ && !door_closed) { memcpy(ref, bg, sizeof bg); have_ref_ = true; }
-    if (door_closed && !was_closed_ && have_ref_) rec_left_ = p.recover_frames;
-    was_closed_ = door_closed;
+    if (door_known) {
+      if (!known_) known_ = true;
+      else {
+        if (was_closed_ && !door_closed) { memcpy(ref, bg, sizeof bg); have_ref_ = true; ref_seq_++; }
+        if (door_closed && !was_closed_) {
+          if (have_ref_) rec_left_ = p.recover_frames;
+          else noref_left_ = p.recover_frames;
+        }
+      }
+      was_closed_ = door_closed;
+    }
     // [4] background learning
     for (int i = 0; i < 64; i++) {
       float a = (occupied_ && sn[i] > p.k) ? p.alpha_present : p.alpha;
@@ -155,6 +173,16 @@ class Detector {
           float step = p.recover * (ref[i] - bg[i]);
           float cap = 0.25f * p.a_s;
           if (step > cap) step = cap;
+          bg[i] += step; s[i] -= step;
+        }
+      }
+    }
+    // No snapshot: follow slow warming only (a dog is a ~1 C step, the scene warms ~0.015 C/s).
+    if (noref_left_ > 0 && door_closed) {
+      noref_left_--;
+      for (int i = 0; i < 64; i++) {
+        if (s[i] > 0) {
+          float step = s[i] < p.noref_rate ? s[i] : p.noref_rate;
           bg[i] += step; s[i] -= step;
         }
       }
@@ -174,8 +202,9 @@ class Detector {
 
  private:
   static constexpr int kWarmup = 20;
-  int n_ = 0, on_run_ = 0, off_run_ = 0, occ_clear_ = 0, rec_left_ = 0;
-  bool have_prev_ = false, have_ref_ = false, was_closed_ = true, present_ = false, occupied_ = false;
+  int n_ = 0, on_run_ = 0, off_run_ = 0, occ_clear_ = 0, rec_left_ = 0, noref_left_ = 0;
+  uint32_t ref_seq_ = 0;
+  bool have_prev_ = false, have_ref_ = false, was_closed_ = true, known_ = false, present_ = false, occupied_ = false;
 };
 
 }  // namespace ge2

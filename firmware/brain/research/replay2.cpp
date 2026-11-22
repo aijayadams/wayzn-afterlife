@@ -4,7 +4,7 @@
 //   /tmp/replay2 <capture.log> [out.csv]        replay; CSV: frame,present,occupied,score,
 //                                               v1_present,v1_occupied (one row per frame)
 // Door state comes from the log's `# door: <old> -> <new>` lines (closed = "closed").
-// A reset of the device ms counter (reboot) starts fresh detectors.
+// A reset of the device ms counter (reboot) starts fresh detectors, like evaluate.py.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,7 +28,7 @@ static void tests() {
     for (int k = 0; k < 6000; k++) { noisy(f, 17.0f); ge2::Result r = d.update(f, true); p += r.present; o += r.occupied; }
     CHECK(p == 0 && o == 0);
   }
-  // 2. A single warm pixel: +1.0 C (dog at the edge of the view) -> occupied within 1 s, not present.
+  // 2. The incident: one pixel +1.0 C (dog at the edge) -> occupied within 1 s, not present.
   //    presence.h scores ~0.35 per frame here, under its occ_on 0.6.
   {
     ge2::Detector d; ge::Detector v1; ge2::Result r; ge::Result r1;
@@ -42,7 +42,7 @@ static void tests() {
     }
     CHECK(k_occ >= 0 && k_occ <= 10);
     CHECK(r.occupied && !r.present);
-    printf("  single warm pixel: v2 occupied after %d frames; presence.h occupied %d/120 frames\n", k_occ, v1_occ);
+    printf("  incident-like pixel: v2 occupied after %d frames; presence.h occupied %d/120 frames\n", k_occ, v1_occ);
   }
   // 3. A dog-sized blob (4 px +2 C) -> present within 0.5 s; clears 2-5 s after it leaves.
   {
@@ -113,6 +113,50 @@ static void tests() {
     int occ = 0;
     for (int k = 0; k < 3000; k++) { noisy(f, 17.0f); f[32] += 1.0f; f[33] += 1.0f; r = d.update(f, true); occ += r.occupied; }
     CHECK(occ >= 2990);
+  }
+  // 8. Reboot while open (the 2026-11-22 false obstruction). The open-door scene (column cooled
+  //    1 C) is all the detector has seen; then the door closes and the scene warms back over 90 s.
+  //    a) with the snapshot restored (as from RTC memory), b) with none (power cut): no false
+  //    occupied either way, and a dog arriving after the close is still caught.
+  for (int withRef = 1; withRef >= 0; withRef--) {
+    ge2::Detector before, d; ge2::Result r;
+    for (int k = 0; k < 600; k++) { noisy(f, 17.0f); before.update(f, true); }
+    noisy(f, 17.0f); before.update(f, false);  // door starts to open: snapshot
+    CHECK(before.hasRef());
+    if (withRef) d.loadRef(before.refData());
+    for (int k = 0; k < 600; k++) {  // reboot while open
+      noisy(f, 17.0f); for (int row = 2; row < 7; row++) f[row * 8 + 3] -= 1.0f;
+      r = d.update(f, false, k >= 30);  // door state unknown for the first 3 s
+    }
+    CHECK(!r.occupied);
+    int false_occ = 0;
+    for (int k = 0; k < 1500; k++) {
+      noisy(f, 17.0f); float c = k < 900 ? 1.0f - k / 900.0f : 0.0f;
+      for (int row = 2; row < 7; row++) f[row * 8 + 3] -= c;
+      r = d.update(f, true); false_occ += r.occupied;
+    }
+    CHECK(false_occ == 0);
+    int k_occ = -1;
+    for (int k = 0; k < 50; k++) { noisy(f, 17.0f); f[34] += 1.0f; r = d.update(f, true); if (r.occupied && k_occ < 0) k_occ = k; }
+    CHECK(k_occ >= 0 && k_occ <= 10);
+    printf("  reboot while open (%s): false occupied %d frames after close; dog caught after %d frames\n",
+           withRef ? "snapshot restored" : "no snapshot", false_occ, k_occ);
+  }
+  // 9. No snapshot: a dog arriving 20 s after the close (scene still warming) is caught and held >= 20 s.
+  {
+    ge2::Detector d; ge2::Result r;
+    for (int k = 0; k < 600; k++) { noisy(f, 17.0f); for (int row = 2; row < 7; row++) f[row * 8 + 3] -= 1.0f; d.update(f, false); }
+    int k_occ = -1, held = 0;
+    for (int k = 0; k < 600; k++) {
+      noisy(f, 17.0f); float c = k < 900 ? 1.0f - k / 900.0f : 0.0f;
+      for (int row = 2; row < 7; row++) f[row * 8 + 3] -= c;
+      if (k >= 200) f[42] += 1.1f;
+      r = d.update(f, true);
+      if (k >= 200 && r.occupied) { if (k_occ < 0) k_occ = k - 200; held++; }
+    }
+    CHECK(k_occ >= 0 && k_occ <= 10);
+    CHECK(held >= 200);
+    printf("  no snapshot, dog 20 s after close: caught after %d frames, occupied %d of 400 frames\n", k_occ, held);
   }
   printf("tests: %s (%d failures)\n", fails ? "FAIL" : "ok", fails);
 }
