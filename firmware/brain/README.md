@@ -52,6 +52,9 @@ Behaviour:
   during the run (it takes any command as the end stop, giving a wrong zero); an open waits for
   the end. The measured travel is checked against `expected_travel` (a setting, from HA; 2 %);
   a wrong one is rejected and the calibration retried. 3 failures latch a fault (door open).
+  auto_zero's first closing pass doesn't end by itself at the closed end (it keeps pushing at
+  reduced force, or browns the STM out): near the closed end and still for 5 s, the brain resets
+  the STM, which is then zeroed as closed. A calibration timeout resets the STM and opens.
 - No OTA while the door is moving.
 - Detection: the doorway is occupied (no closing; a close reverses) if either the original detector
   (`src/presence.h`) or v2 (`src/presence2.h`, docs/DETECTION-RESEARCH.md) says so. Presence (auto-open)

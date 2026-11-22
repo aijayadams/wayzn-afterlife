@@ -976,6 +976,24 @@ static void calEnded() {
   requestOpen("open requested during the calibration", true);
 }
 
+// auto_zero's first closing pass (0x14) on this kind of door never ends by itself: it reaches the
+// closed end and keeps pushing at reduced force (at install the STM browned out there; on
+// 2026-11-22 12:56-13:04 it pushed until reset). Near the closed end and not moving for 5 s means
+// it is at the closed stall: reset the STM, and onBoot's closed-stall rule zeroes it as closed.
+static void calStall(uint32_t now) {
+  static int last_p = 0;
+  static uint32_t still_since = 0;
+  const stm::Status &s = P.st;
+  if (!calibrating || cur_U != 0x14) { still_since = 0; return; }
+  if (s.p != last_p) { last_p = s.p; still_since = now; return; }
+  if (!still_since) still_since = now;
+  if (s.p > 12000 && now - still_since > 5000) {
+    still_since = 0;
+    OUT.printf("# calibration: closing pass stalled at the closed end (p=%d for 5 s): STM reset ends it\n", s.p);
+    stmReset("calibration at the closed stall");
+  }
+}
+
 static void recoverPosition(uint32_t now) {
   if (pos_know == POS_KNOWN) { recal_tries = 0; recal_next = 0; return; }
   if (!tx_on || !have_status || configuring || calibrating || fault || stm::moving(phase)) return;
@@ -999,6 +1017,7 @@ static void recoverPosition(uint32_t now) {
 static void supervise() {
   uint32_t now = millis();
   recoverPosition(now);
+  calStall(now);
   if (close_pending) {
     if (fault) cancelPendingClose("fault");
     else if (phase != stm::PH_OPEN) cancelPendingClose(stm::phaseName(phase));
@@ -1063,6 +1082,12 @@ static void supervise() {
       String why = String("move timeout in ") + stm::phaseName(phase);
       if (phase == stm::PH_CLOSING) {
         raiseFault(why);  // -> open
+      } else if (phase == stm::PH_CALIBRATING) {
+        // The STM ignores commands mid-auto_zero: reset it, then open (position unknown: disengage).
+        calibrating = false;
+        open_after_cal = false;
+        stmReset("calibration timeout");
+        raiseFault(why);
       } else {
         motion("stop", "move timeout");
         if (!fault) OUT.printf("# FAULT: %s -> stopped; `fault clear` to resume\n", why.c_str());
