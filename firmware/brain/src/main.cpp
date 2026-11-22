@@ -691,7 +691,7 @@ static void apiPoll() {
     }
   }
   static uint32_t last_pub = 0;
-  if (millis() - last_pub < 100) return;
+  if (millis() - last_pub < 100 && !api::anyFinished()) return;
   last_pub = millis();
   api::Snapshot sn;
   strlcpy(sn.state, haState(), sizeof sn.state);
@@ -722,6 +722,7 @@ static void apiPoll() {
   sn.status_age_ms = have_status ? millis() - last_status_ms : 0xFFFFFFFF;
   sn.uptime_s = millis() / 1000;
   api::publish(sn);
+  api::release();
 }
 
 static void supervise() {

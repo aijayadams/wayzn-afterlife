@@ -68,10 +68,20 @@ static Request *next() {
   Request *r = nullptr;
   return xQueueReceive(reqq, &r, 0) == pdTRUE ? r : nullptr;
 }
+// Requests are answered only after the next snapshot is published (release()), so a status read
+// straight after any reply already shows what the request changed.
+static Request *finished[8];
+static int n_finished = 0;
 static void finish(Request *r, bool ok, const char *reason) {
   r->ok = ok;
   strlcpy(r->reason, reason ? reason : "", sizeof r->reason);
-  r->done = true;
+  if (n_finished < 8) finished[n_finished++] = r;
+  else r->done = true;
+}
+static bool anyFinished() { return n_finished > 0; }
+static void release() {
+  for (int i = 0; i < n_finished; i++) finished[i]->done = true;
+  n_finished = 0;
 }
 
 // HTTP side (net task) -------------------------------------------------------
