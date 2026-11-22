@@ -140,6 +140,10 @@ static ge::Result ge_last;
 static ge2::Detector det2;
 static ge2::Result g2;
 static uint32_t g2_occ_since = 0, g2_pres_since = 0, g2_would_block = 0, g2_would_reverse = 0;
+// Stage 2 (docs/DETECTION-RESEARCH.md): the doorway counts as occupied if EITHER detector says so.
+// This can only block or reverse more closes, never fewer. v2 sees a small dog that warms a
+// single pixel by ~1 C, which the original detector averages away.
+static bool occupiedAny() { return ge_last.occupied || g2.occupied; }
 static float frame[64];
 static bool ge_ok = false, ge_stream = false, ge_raw = false;
 static uint32_t ge_fail = 0, last_presence_ms = 0, last_occupied_ms = 0, last_ge_ms = 0;
@@ -185,6 +189,11 @@ static void onBoot() {
   pushConfig(closed_stall);
 }
 
+// Close recorder state (functions further down, at "close recorder").
+static bool cap_on = false;             // a close is being captured
+static uint32_t cap_evt = 0, cap_t0 = 0, cap_until = 0, cap_next = 0, cap_sent = 0, cap_lost = 0;
+static void captureStart();
+
 static void onPhase(stm::DoorPhase np, int pos) {
   if (np == phase) return;
   if (stm::moving(np) && !stm::moving(phase)) move_peak = cur_now;
@@ -201,6 +210,8 @@ static void onPhase(stm::DoorPhase np, int pos) {
     if (recent >= REVERSALS_FAULT) raiseFault("oscillation: " + String(recent) + " reversals in 2 min");
   }
   if (np == stm::PH_OPEN) open_since = millis();
+  if (np == stm::PH_CLOSING) captureStart();
+  if (cap_on) cap_until = stm::moving(np) ? 0 : millis() + 3000;
   if (np == stm::PH_CLOSED && api_hold) { api_hold = false; OUT.println("# api hold released (door closed)"); }
   if (np == stm::PH_FAILED) raiseFault("STM open failed (state 27)");
   phase = np;
@@ -304,7 +315,7 @@ static bool requestClose(const char *why, String &no) {
   if (fault) { no = "fault latched: " + fault_why; return false; }
   if (pos_know != POS_KNOWN) { no = String("position ") + (pos_know == POS_INFERRED ? "inferred, not zeroed" : "unknown"); return false; }
   if (!ge_ok || !det.ready) { no = "Grid-EYE not reading: can't see the doorway"; return false; }
-  if (s_obst && ge_last.occupied) { no = "doorway not clear"; return false; }
+  if (s_obst && occupiedAny()) { no = "doorway not clear"; return false; }
   if (configuring) { no = "STM still being configured"; return false; }
   if (phase != stm::PH_OPEN) { no = String("door is ") + stm::phaseName(phase); return false; }
   if (g2.occupied) {
@@ -327,6 +338,86 @@ static bool readFrame() {
   }
   for (int i = 0; i < 64; i++) frame[i] = ge::pixelC(raw[2 * i], raw[2 * i + 1]);
   return true;
+}
+
+// ---------- close recorder ----------
+// The last REC_N frames (15 s) stay in RAM, one byte per pixel ((C + 16) x 4: -16..+47.75 C in
+// the sensor's 0.25 C steps; ~10 KB). Every close ships the 10 s before it and every frame until
+// 3 s after the door stops to syslog as `frame e=<event> t=<ms from close start> ph=<phase>
+// p=<position> o=<occupied live,v2> <base64 of 64 bytes>`, paced to leave room for event lines.
+static constexpr int REC_N = 150, REC_PRE = 100;
+static uint8_t rec[REC_N][64];
+static uint32_t rec_ms[REC_N];
+static char rec_ph[REC_N];
+static int16_t rec_p[REC_N];
+static uint8_t rec_occ[REC_N];
+static uint32_t rec_total = 0;          // frames recorded since boot
+
+static char phaseChar(stm::DoorPhase ph) {
+  switch (ph) {
+    case stm::PH_CLOSING: return 'c';
+    case stm::PH_OPENING: return 'o';
+    case stm::PH_REVERSING: return 'r';
+    case stm::PH_CLOSED: return 'C';
+    case stm::PH_OPEN: return 'O';
+    default: return '?';
+  }
+}
+
+static void recordFrame() {
+  int i = rec_total % REC_N;
+  for (int k = 0; k < 64; k++) {
+    long v = lroundf((frame[k] + 16.0f) * 4.0f);
+    rec[i][k] = (uint8_t)(v < 0 ? 0 : v > 255 ? 255 : v);
+  }
+  rec_ms[i] = millis();
+  rec_ph[i] = phaseChar(phase);
+  rec_p[i] = (int16_t)P.st.p;
+  rec_occ[i] = (ge_last.occupied ? 1 : 0) | (g2.occupied ? 2 : 0);
+  rec_total++;
+}
+
+static void captureStart() {
+  if (cap_on) return;  // a close during a capture extends it
+  cap_on = true;
+  cap_evt++;
+  cap_t0 = millis();
+  cap_until = 0;
+  cap_sent = cap_lost = 0;
+  cap_next = rec_total > (uint32_t)REC_PRE ? rec_total - REC_PRE : 0;
+  OUT.printf("# close capture e=%u started (frames from %u)\n", (unsigned)cap_evt, (unsigned)cap_next);
+}
+
+static void captureShip() {
+  if (!cap_on) return;
+  static const char *B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  if (rec_total - cap_next > (uint32_t)REC_N) {  // fell behind: oldest frames overwritten
+    cap_lost += rec_total - REC_N - cap_next;
+    cap_next = rec_total - REC_N;
+  }
+  for (int n = 0; n < 6 && cap_next < rec_total && net::logSpace() > 16; n++, cap_next++) {
+    int i = cap_next % REC_N;
+    char b[200];
+    int len = snprintf(b, sizeof b, "frame e=%u t=%ld ph=%c p=%d o=%u ", (unsigned)cap_evt,
+                       (long)(rec_ms[i] - cap_t0), rec_ph[i], rec_p[i], rec_occ[i]);
+    const uint8_t *d = rec[i];
+    for (int k = 0; k < 64; k += 3) {
+      uint32_t v = (uint32_t)d[k] << 16 | (k + 1 < 64 ? (uint32_t)d[k + 1] << 8 : 0) | (k + 2 < 64 ? d[k + 2] : 0);
+      b[len++] = B64[(v >> 18) & 63];
+      b[len++] = B64[(v >> 12) & 63];
+      b[len++] = k + 1 < 64 ? B64[(v >> 6) & 63] : '=';
+      b[len++] = k + 2 < 64 ? B64[v & 63] : '=';
+    }
+    b[len] = 0;
+    if (!net::logOnly(b)) break;
+    cap_sent++;
+  }
+  // Finished when the door has been still for 3 s and everything recorded up to then is out.
+  if (cap_until && millis() > cap_until && cap_next >= rec_total) {
+    OUT.printf("# close capture e=%u done: %u frames shipped, %u lost\n", (unsigned)cap_evt, (unsigned)cap_sent,
+               (unsigned)cap_lost);
+    cap_on = false;
+  }
 }
 
 static void shadow() {
@@ -358,8 +449,8 @@ static void shadow() {
   if (phase == stm::PH_CLOSING && g2.occupied && !obstr_sent) {
     if (!closing_flagged) {
       g2_would_reverse++;
-      OUT.printf("# v2 WOULD REVERSE: door closing while v2 occupied (peak %.2f at %s), live occupied=%d\n", g2.peak,
-                 cell(g2.peak_i).c_str(), ge_last.occupied);
+      OUT.printf("# v2 occupied while closing (peak %.2f at %s), live occupied=%d%s\n", g2.peak,
+                 cell(g2.peak_i).c_str(), ge_last.occupied, ge_last.occupied ? "" : ": caught by v2 only");
       closing_flagged = true;
     }
   } else if (phase != stm::PH_CLOSING) {
@@ -381,6 +472,7 @@ static void gridEye() {
   ge_fail = 0;
   bool was = ge_last.present, wasOcc = ge_last.occupied;
   ge_last = det.update(frame);
+  recordFrame();
   shadow();
   if (ge_last.occupied != wasOcc) OUT.printf("# occupied %s (score %.2f)\n", ge_last.occupied ? "ON" : "off", ge_last.smoothed);
   if (ge_last.present) last_presence_ms = millis();
@@ -403,13 +495,14 @@ static void gridEye() {
 // reclose by itself from state 7, which is the wanted behaviour after a reversal.
 static void obstruction() {
   if (!tx_on || millis() - obstr_ms < 300) return;
-  bool danger = s_obst && (ge_last.occupied || !ge_ok);
+  bool danger = s_obst && (occupiedAny() || !ge_ok);
   if (!obstr_sent && danger && phase == stm::PH_CLOSING) {
     cancelMotion();  // no queued close may follow
     send("set_obstruction", true);
     obstr_sent = true;
     obstr_ms = millis();
-    OUT.println("# obstruction: doorway occupied while closing -> set_obstruction");
+    OUT.printf("# obstruction: doorway occupied while closing (live=%d v2=%d) -> set_obstruction\n", ge_last.occupied,
+               g2.occupied);
   } else if (obstr_sent && !danger) {
     send("clear_obstruction", true);
     obstr_sent = false;
@@ -418,7 +511,7 @@ static void obstruction() {
 }
 
 static void autoLogic() {
-  if (ge_last.occupied || !ge_ok) last_occupied_ms = millis();
+  if (occupiedAny() || !ge_ok) last_occupied_ms = millis();
   if (!s_auto || configuring || calibrating) return;
   if (ge_last.present && (phase == stm::PH_CLOSED || phase == stm::PH_CLOSING)) requestOpen("presence");
   if (s_auto_close && phase == stm::PH_OPEN && !obstr_sent && !api_hold &&
@@ -565,7 +658,7 @@ static void apiPoll() {
           sizeof sn.position);
   if (fault) strlcpy(sn.fault, fault_why.c_str(), sizeof sn.fault);
   sn.presence = ge_last.present;
-  sn.occupied = ge_last.occupied;
+  sn.occupied = occupiedAny();
   sn.auto_mode = s_auto;
   sn.auto_close = s_auto_close;
   sn.obst = s_obst;
@@ -632,7 +725,7 @@ static void supervise() {
       }
     }
   }
-  if (calibrating && ge_last.occupied) {
+  if (calibrating && occupiedAny()) {
     motion("stop", "calibration aborted");
     calibrating = false;
     OUT.println("# calibration: ABORTED, something in the doorway");
@@ -749,6 +842,7 @@ void loop() {
   obstruction();
   autoLogic();
   apiPoll();
+  captureShip();
   supervise();
   pumpQueue();
   net::armed = stm::moving(phase) || calibrating;  // no OTA while the door moves

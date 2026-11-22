@@ -207,6 +207,16 @@ static void task(void *) {
   }
 }
 
+// Syslog-only lines (bulk data such as thermal frames): not echoed to USB or telnet. Returns
+// false if the queue is full. logSpace() lets a producer pace itself and leave room for events.
+static bool logOnly(const char *line) {
+  if (!logq || !SYSLOG_HOST[0]) return false;
+  LogLine ll;
+  strlcpy(ll.s, line, sizeof ll.s);
+  return xQueueSend(logq, &ll, 0) == pdTRUE;
+}
+static int logSpace() { return (logq && SYSLOG_HOST[0]) ? (int)uxQueueSpacesAvailable(logq) : 0; }
+
 static void begin(void (*onDisconnect)()) {
   on_disconnect = onDisconnect;
   txbuf = xStreamBufferCreate(16384, 1);
