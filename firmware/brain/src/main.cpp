@@ -151,6 +151,8 @@ static uint32_t g2_occ_since = 0, g2_pres_since = 0, g2_would_block = 0, g2_woul
 // This can only block or reverse more closes, never fewer. v2 sees a small dog that warms a
 // single pixel by ~1 C, which the original detector averages away.
 static bool occupiedAny() { return ge_last.occupied || g2.occupied; }
+static uint32_t last_present_seen = 0, last_occ_seen = 0;  // for the API: how long ago, so a short
+static bool present_seen = false, occ_seen = false;         // visit between two polls still shows
 static float frame[64];
 static bool ge_ok = false, ge_stream = false, ge_raw = false;
 static uint32_t ge_fail = 0, last_presence_ms = 0, last_occupied_ms = 0, last_ge_ms = 0;
@@ -488,6 +490,7 @@ static void gridEye() {
   bool was = ge_last.present, wasOcc = ge_last.occupied;
   ge_last = det.update(frame);
   recordFrame();
+  if (ge_last.present) { last_present_seen = millis(); present_seen = true; }
   shadow();
   if (ge_last.occupied != wasOcc) OUT.printf("# occupied %s (score %.2f)\n", ge_last.occupied ? "ON" : "off", ge_last.smoothed);
   if (ge_last.present) last_presence_ms = millis();
@@ -527,6 +530,7 @@ static void obstruction() {
 
 static void autoLogic() {
   if (occupiedAny() || !ge_ok) last_occupied_ms = millis();
+  if (occupiedAny()) { last_occ_seen = millis(); occ_seen = true; }
   if (!s_auto || configuring || calibrating) return;
   if (ge_last.present && (phase == stm::PH_CLOSED || phase == stm::PH_CLOSING)) requestOpen("presence");
   if (s_auto_close && phase == stm::PH_OPEN && !obstr_sent && !api_hold &&
@@ -693,6 +697,8 @@ static void apiPoll() {
   sn.noise_c = det.p.noise_c;
   sn.hold = api_hold;
   sn.close_pending = close_pending;
+  sn.presence_age_ms = present_seen ? (int32_t)(millis() - last_present_seen) : -1;
+  sn.occupied_age_ms = occ_seen ? (int32_t)(millis() - last_occ_seen) : -1;
   sn.grideye_ok = ge_ok;
   sn.p = P.st.p;
   sn.status_age_ms = have_status ? millis() - last_status_ms : 0xFFFFFFFF;

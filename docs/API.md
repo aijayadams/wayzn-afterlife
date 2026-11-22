@@ -34,6 +34,8 @@ Commands are acknowledged in ~0.1-0.2 s (measured); the move itself takes ~5-8 s
 - `detail`: the brain's internal phase (`reversing`, `calibrating`, `open-failed`, …).
 - `position`: `known` (zeroed) | `inferred` | `unknown`. `p`: encoder position (closed ≈ -73,
   open ≈ -6190).
+- `presence_age_ms`, `occupied_age_ms`: milliseconds since presence / occupied (either detector) was last true; `-1` if not since boot. A poller can use these to see a visit shorter than its poll interval.
+- `close_pending`: a close is waiting for the doorway to clear.
 - `fault`: `null` or the latched fault (the door is then held open).
 - `presence` (someone wants out), `occupied` (doorway not clear; blocks closing), `auto`
   (local Grid-EYE auto-open/close), `hold` (opened by HA, held), `grideye_ok`.
