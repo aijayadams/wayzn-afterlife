@@ -9,7 +9,7 @@ otherwise `401`.
 |---|---|---|
 | `GET /api/status` | `200` JSON, below | |
 | `POST /api/open` | `200 {"ok":true}` | **Always accepted** (never lock a dog out). Holds the door open (no auto-close) until `/api/close`. Unknown position: drives fully open (`disengage`). |
-| `POST /api/close` | `200 {"ok":true}` or `409 {"ok":false,"reason":"…"}` | Refused while the doorway is occupied, a fault is latched, the position isn't known, or the Grid-EYE isn't reading. Closed or closing already: `200` with a reason. |
+| `POST /api/close` | `200 {"ok":true}`, `200 {"ok":true,"reason":"waiting for the doorway to clear"}`, or `409 {"ok":false,"reason":"…"}` | If the doorway is occupied, the close is accepted and runs once the doorway has been clear for 3 s; it expires after 5 min and is cancelled by any open or a fault (`close_pending` in the status). Refused (409) when a fault is latched, the position isn't known or the Grid-EYE isn't reading. Closed or closing already: `200` with a reason. |
 | `POST /api/stop` | `200 {"ok":true}` | |
 | `POST /api/settings` body: any subset of `settings` below | `200 {"ok":true}` or `400 {"ok":false,"reason":"…"}` | All keys are validated first, then all are applied (or none). Unknown keys, wrong types and out-of-range values are rejected, never clamped. Saved on the door; every change is logged. |
 | `POST /api/auto` body `{"on":true}` / `{"on":false}` | `200 {"ok":true}`, `400` on any other body | Grid-EYE auto-open (and its auto-close) on/off. Saved on the door. HA's open/close work either way. |

@@ -131,6 +131,13 @@ static uint32_t last_status_ms = 0;
 // Opened by Home Assistant: hold open (no auto-close) until HA closes it. Overnight HA lets
 // the dogs back in from outside, where the Grid-EYE may not see them coming.
 static bool api_hold = false;
+// A close asked for while the doorway is occupied waits here and runs once the doorway has been
+// clear for PENDING_CLEAR_MS (callers such as HA automations fire once and don't retry). It expires
+// after PENDING_MAX_MS and is cancelled by any open or a fault.
+static constexpr uint32_t PENDING_CLEAR_MS = 3000, PENDING_MAX_MS = 300000;
+static bool close_pending = false;
+static uint32_t close_pending_since = 0;
+static void cancelPendingClose(const char *why);
 
 // ---------- Grid-EYE ----------
 static ge::Detector det;
@@ -299,13 +306,21 @@ static bool motion(const char *cmd, const char *why) {
 }
 
 static void raiseFault(const String &why) {
+  cancelPendingClose("fault");
   if (!fault) OUT.printf("# FAULT: %s -> latching OPEN; `fault clear` to resume\n", why.c_str());
   fault = true;
   fault_why = why;
   requestOpen("fault");
 }
 
+static void cancelPendingClose(const char *why) {
+  if (!close_pending) return;
+  close_pending = false;
+  OUT.printf("# pending close cancelled (%s)\n", why);
+}
+
 static void requestOpen(const char *why) {
+  cancelPendingClose(why);
   if (phase == stm::PH_OPEN || phase == stm::PH_OPENING || phase == stm::PH_REVERSING) return;
   // Position unknown: `disengage` drives fully open whatever the STM thinks (never lock out).
   motion(pos_know == POS_KNOWN ? "open" : "disengage", why);
@@ -622,7 +637,12 @@ static void apiPoll() {
         if (phase == stm::PH_CLOSED || phase == stm::PH_CLOSING) { api_hold = false; api::finish(r, true, "already closed or closing"); break; }
         bool ok = requestClose("home assistant", no);
         if (ok || no.length() == 0) { api_hold = false; api::finish(r, true, nullptr); }  // empty = deduped repeat
-        else { OUT.printf("# api: close refused: %s\n", no.c_str()); api::finish(r, false, no.c_str()); }
+        else if (no == "doorway not clear") {
+          close_pending = true;
+          close_pending_since = millis();
+          OUT.println("# api: close pending: will close once the doorway has been clear for 3 s");
+          api::finish(r, true, "waiting for the doorway to clear");
+        } else { OUT.printf("# api: close refused: %s\n", no.c_str()); api::finish(r, false, no.c_str()); }
         break;
       }
       case api::CMD_SETTINGS: {
@@ -672,6 +692,7 @@ static void apiPoll() {
   sn.occupied_th = det.p.occ_on;
   sn.noise_c = det.p.noise_c;
   sn.hold = api_hold;
+  sn.close_pending = close_pending;
   sn.grideye_ok = ge_ok;
   sn.p = P.st.p;
   sn.status_age_ms = have_status ? millis() - last_status_ms : 0xFFFFFFFF;
@@ -681,6 +702,23 @@ static void apiPoll() {
 
 static void supervise() {
   uint32_t now = millis();
+  if (close_pending) {
+    if (fault) cancelPendingClose("fault");
+    else if (phase != stm::PH_OPEN) cancelPendingClose(stm::phaseName(phase));
+    else if (now - close_pending_since > PENDING_MAX_MS) cancelPendingClose("doorway never cleared in 5 min");
+    else if (!occupiedAny() && ge_ok && now - last_occupied_ms >= PENDING_CLEAR_MS) {
+      String no;
+      close_pending = false;
+      api_hold = false;
+      if (requestClose("pending close: doorway clear", no) || no.length() == 0) {
+        OUT.println("# pending close: doorway clear, closing");
+      } else if (no == "doorway not clear") {
+        close_pending = true;  // occupied again in the same instant: keep waiting
+      } else {
+        OUT.printf("# pending close dropped: %s\n", no.c_str());
+      }
+    }
+  }
   // STM liveness: on ESP boot give it 25 s to speak (it may be at its 10 s rate), then reset it.
   // Later: 30 s of silence -> reset, at most once a minute.
   if (!heard && now - boot_ms > 25000 && stm_resets == 0) stmReset("no STM output since ESP boot");
