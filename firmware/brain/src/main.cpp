@@ -172,7 +172,8 @@ static bool ge_ok = false, ge_stream = false, ge_raw = false;
 static uint32_t ge_fail = 0, last_presence_ms = 0, last_occupied_ms = 0, last_ge_ms = 0;
 static bool obstr_sent = false;   // what we last told the STM
 // After a reversal the STM waits in state 7 and recloses by itself as soon as it gets
-// clear_obstruction. rev_keep: don't clear it (stay open) because an open, a hold or a fault came
+// clear_obstruction (verified again 2026-11-22 11:49:05.966 and 11:58:16.123). rev_keep: don't
+// clear it (stay open) because an explicit open (HA, console; not presence), a hold or a fault came
 // in since, or the doorway stayed occupied for 5 min. Cleared by a close request.
 static bool rev_keep = false;
 static uint32_t obstr_set_ms = 0, last_clear_ms = 0;
@@ -288,7 +289,12 @@ static void onPhase(stm::DoorPhase np, int pos) {
     if (recent >= REVERSALS_FAULT) raiseFault("oscillation: " + String(recent) + " reversals in 2 min");
   }
   if (np == stm::PH_OPEN) open_since = millis();
-  if (np == stm::PH_CLOSING) { captureStart(); if (phase != stm::PH_CLOSING) onCloseStarted(); }
+  if (np == stm::PH_CLOSING && phase != stm::PH_CLOSING) {
+    captureStart();
+    // Never trust the STM's flag across a new close: re-arm, so an occupied doorway reverses it.
+    if (obstr_sent) { obstr_sent = false; OUT.println("# close started: obstruction check re-armed"); }
+    onCloseStarted();
+  }
   if (np == stm::PH_CLOSED) rev_keep = false;
   if (cap_on) cap_until = stm::moving(np) ? 0 : millis() + 3000;
   if (np == stm::PH_CLOSED && api_hold) { api_hold = false; OUT.println("# api hold released (door closed)"); }
@@ -404,11 +410,16 @@ static void cancelPendingClose(const char *why) {
 
 static void requestOpen(const char *why, bool force) {
   cancelPendingClose(why);
-  if (obstr_sent && !rev_keep && phase != stm::PH_CLOSED) {
+  // Presence during a reversal is what blocked the close, not a request to stay open: once the
+  // doorway is clear the close continues. Only an explicit open (HA, console) or a fault keeps it.
+  if (obstr_sent && !rev_keep && phase != stm::PH_CLOSED && strcmp(why, "presence") != 0) {
     rev_keep = true;  // the STM would reclose on clear_obstruction: keep it set
     OUT.printf("# open (%s) after a reversal: staying open\n", why);
   }
   if (phase == stm::PH_OPEN || phase == stm::PH_OPENING || phase == stm::PH_REVERSING) return;
+  // Closing with the obstruction flag already sent: that reverses it. An open on top would reach
+  // the STM during the reversal's opening and make it run to its open end stop (2026-11-22 11:54:17).
+  if (phase == stm::PH_CLOSING && obstr_sent) return;
   // Position unknown, or the STM's open just failed (27): `disengage` drives fully open whatever
   // the STM thinks (never lock out).
   bool plain = pos_know == POS_KNOWN && phase != stm::PH_FAILED;
@@ -422,15 +433,21 @@ static bool requestClose(const char *why, String &no) {
   if (s_obst && occupiedAny()) { no = "doorway not clear"; return false; }
   if (configuring) { no = "STM still being configured"; return false; }
   if (phase != stm::PH_OPEN) { no = String("door is ") + stm::phaseName(phase); return false; }
-  if (obstr_sent) {
-    if (cur_U == 0x07) {  // waiting after a reversal: clearing the obstruction makes the STM reclose
-      if (rev_keep) OUT.printf("# close (%s) after a reversal: the door recloses now\n", why);
-      rev_keep = false;
-      return true;  // obstruction() clears it (the doorway is clear)
-    }
-    send("clear_obstruction", true);  // stay-open state: clear first, then close normally
-    obstr_sent = rev_keep = false;
+  rev_keep = false;
+  if (obstr_sent) {  // still set from a reversal (the doorway is clear now)
+    obstr_sent = false;
     obstr_ms = last_clear_ms = millis();
+    if (cur_U == 0x07) {  // waiting after the reversal: the clear alone makes the STM reclose
+      send("clear_obstruction", true);
+      OUT.printf("# close (%s) after a reversal: clear_obstruction, the STM recloses\n", why);
+      return true;
+    }
+    // Stay-open: the clear must reach the STM before the close (a close with the flag still set
+    // reverses and runs to the open end stop, 2026-11-22 12:25:00). motion() puts the close at the
+    // front of the queue, so queue it first and put the clear in front of it.
+    bool ok = motion("close", why);
+    send("clear_obstruction", true);
+    return ok;
   }
   return motion("close", why);
 }
@@ -1040,7 +1057,7 @@ static void command(String c) {
   else if (c == "ge") printFrame();
   else if (c == "ge on" || c == "ge off") ge_stream = c == "ge on";
   else if (c == "ge raw on" || c == "ge raw off") ge_raw = c == "ge raw on";
-  else if (c == "gebg") { det.reset(); OUT.println("# grid-eye: relearning background (2 s)"); }
+  else if (c == "gebg") { det.reset(); det2.reset(); OUT.println("# grid-eye: both detectors relearning background (2 s): doorway must be clear"); }
   else if (c == "fault clear") clearFault("console");
   else if (c == "cfg") pushConfig(false);
   else if (c == "sreset") stmReset("command");
