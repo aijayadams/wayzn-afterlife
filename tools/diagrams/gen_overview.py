@@ -117,8 +117,8 @@ v.rect(640, 108, 512, 420, "none", "#10b981", rx=22, sw=2, extra='stroke-dasharr
 v.text(1140, 128, "your home network", 13, "#059669", "end", "bold")
 # HA
 v.rect(706, 140, 210, 62, "#ffffff", "#38bdf8", rx=14, sw=2.5)
-v.text(811, 168, "Home Assistant", 17, "#0c4a6e", weight="bold")
-v.text(811, 188, "open · close · schedule · tune", 12, "#0369a1")
+v.text(811, 168, "Your home automation", 16, "#0c4a6e", weight="bold")
+v.text(811, 188, "e.g. Home Assistant · local API", 12, "#0369a1")
 v.add('<line x1="811" y1="204" x2="811" y2="246" stroke="#38bdf8" stroke-width="4"/>')
 v.add('<polygon points="811,252 803,238 819,238" fill="#38bdf8"/><polygon points="811,198 803,212 819,212" fill="#38bdf8"/>')
 v.text(822, 232, "local Wi-Fi", 12, "#0369a1", "start")
@@ -139,7 +139,7 @@ chip(v, 721, 392, 180, 64, "#1e3a8a", "STM32", "same motor controller")
 v.text(811, 486, "Wayzn's motor & safety firmware, untouched", 12, "#047857")
 # badges
 bx = 676
-for s, f, c in [("No cloud", "#dcfce7", "#166534"), ("Works offline", "#dbeafe", "#1e40af"),
+for s, f, c in [("No cloud", "#dcfce7", "#166534"), ("Local control", "#dbeafe", "#1e40af"),
                 ("Open source", "#fef3c7", "#92400e"), ("Smarter dog detection", "#ffedd5", "#9a3412")]:
     bx += badge(v, bx, 540, s, f, c) + 8
 v.save("before-after.svg")

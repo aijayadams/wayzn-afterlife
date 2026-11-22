@@ -59,8 +59,8 @@
 <rect x="640" y="108" width="512" height="420" rx="22" fill="none" stroke="#10b981" stroke-width="2" stroke-dasharray="8 6"/>
 <text x="1140" y="128" font-size="13" fill="#059669" text-anchor="end" font-weight="bold" >your home network</text>
 <rect x="706" y="140" width="210" height="62" rx="14" fill="#ffffff" stroke="#38bdf8" stroke-width="2.5" />
-<text x="811" y="168" font-size="17" fill="#0c4a6e" text-anchor="middle" font-weight="bold" >Home Assistant</text>
-<text x="811" y="188" font-size="12" fill="#0369a1" text-anchor="middle" font-weight="normal" >open · close · schedule · tune</text>
+<text x="811" y="168" font-size="16" fill="#0c4a6e" text-anchor="middle" font-weight="bold" >Your home automation</text>
+<text x="811" y="188" font-size="12" fill="#0369a1" text-anchor="middle" font-weight="normal" >e.g. Home Assistant · local API</text>
 <line x1="811" y1="204" x2="811" y2="246" stroke="#38bdf8" stroke-width="4"/>
 <polygon points="811,252 803,238 819,238" fill="#38bdf8"/><polygon points="811,198 803,212 819,212" fill="#38bdf8"/>
 <text x="822" y="232" font-size="12" fill="#0369a1" text-anchor="start" font-weight="normal" >local Wi-Fi</text>
@@ -118,7 +118,7 @@
 <rect x="676" y="540" width="74.8" height="26" rx="13" fill="#dcfce7" stroke="none" stroke-width="2" />
 <text x="713.4" y="558" font-size="13" fill="#166534" text-anchor="middle" font-weight="bold" >No cloud</text>
 <rect x="758.8" y="540" width="112.8" height="26" rx="13" fill="#dbeafe" stroke="none" stroke-width="2" />
-<text x="815.1999999999999" y="558" font-size="13" fill="#1e40af" text-anchor="middle" font-weight="bold" >Works offline</text>
+<text x="815.1999999999999" y="558" font-size="13" fill="#1e40af" text-anchor="middle" font-weight="bold" >Local control</text>
 <rect x="879.5999999999999" y="540" width="97.6" height="26" rx="13" fill="#fef3c7" stroke="none" stroke-width="2" />
 <text x="928.3999999999999" y="558" font-size="13" fill="#92400e" text-anchor="middle" font-weight="bold" >Open source</text>
 <rect x="985.1999999999999" y="540" width="173.6" height="26" rx="13" fill="#ffedd5" stroke="none" stroke-width="2" />
