@@ -19,6 +19,7 @@
 #include <ArduinoOTA.h>
 #include "freertos/stream_buffer.h"
 #include <WiFiUdp.h>
+#include <lwip/sockets.h>
 #include <sys/time.h>
 #include <time.h>
 
@@ -128,6 +129,8 @@ static void task(void *) {
   WiFiClient client;
   WiFiUDP syslog_udp;
   static uint8_t chunk[1024];
+  static size_t pend_len = 0, pend_off = 0;
+  static uint32_t last_progress = 0;
   for (;;) {
     if (!up && WiFi.status() == WL_CONNECTED) {
       up = true;
@@ -157,6 +160,8 @@ static void task(void *) {
         client = n;
         client.setNoDelay(true);
         xStreamBufferReset(txbuf);
+        pend_len = pend_off = 0;
+        last_progress = millis();
         connected = true;
         out.println("# telnet client connected (send ? for help)");
       }
@@ -166,8 +171,27 @@ static void task(void *) {
         if (on_disconnect) on_disconnect();
       }
       if (has) {
-        size_t n;
-        while ((n = xStreamBufferReceive(txbuf, chunk, sizeof chunk, 0)) > 0) client.write(chunk, n);
+        // Never block on the console: a client that stops reading (a laptop asleep) must not
+        // stall this task, which also serves the HTTP API. Send what the socket takes right
+        // now (MSG_DONTWAIT), keep the rest for the next pass, and drop a client that has
+        // taken nothing for 30 s. (NetworkClient::write retries for up to ~10 s.)
+        if (pend_off >= pend_len) {
+          pend_len = xStreamBufferReceive(txbuf, chunk, sizeof chunk, 0);
+          pend_off = 0;
+        }
+        if (pend_len > pend_off) {
+          int r = send(client.fd(), chunk + pend_off, pend_len - pend_off, MSG_DONTWAIT);
+          if (r > 0) {
+            pend_off += r;
+            last_progress = millis();
+          } else if (millis() - last_progress > 30000) {
+            Serial.println("# telnet client not reading for 30 s: disconnected");
+            client.stop();
+            pend_len = pend_off = 0;
+          }
+        } else {
+          last_progress = millis();
+        }
         while (client.available()) {
           uint8_t c = client.read();
           xStreamBufferSend(rxbuf, &c, 1, 0);
