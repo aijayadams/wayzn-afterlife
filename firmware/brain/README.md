@@ -48,8 +48,10 @@ Behaviour:
 - Telnet console: the first line must be `auth <api_token>`; anything else disconnects.
 - Open with unknown position uses `disengage` (always drives fully open).
 - Position recovery: when the STM has no position after a start (power cut, STM reboot), the
-  brain runs `auto_zero` itself once the doorway has been clear 10 s (aborted if anything enters
-  the doorway; retried after 3 min). 3 failures in a row latch a fault (door open).
+  brain runs `auto_zero` itself once the doorway has been clear 10 s. Nothing is sent to the STM
+  during the run (it takes any command as the end stop, giving a wrong zero); an open waits for
+  the end. The measured travel is checked against `expected_travel` (a setting, from HA; 2 %);
+  a wrong one is rejected and the calibration retried. 3 failures latch a fault (door open).
 - No OTA while the door is moving.
 - Detection: the doorway is occupied (no closing; a close reverses) if either the original detector
   (`src/presence.h`) or v2 (`src/presence2.h`, docs/DETECTION-RESEARCH.md) says so. Presence (auto-open)

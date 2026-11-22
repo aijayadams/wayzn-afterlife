@@ -42,7 +42,10 @@ static bool s_auto = false;      // Grid-EYE auto-open
 static bool s_auto_close = true; // auto-close after a presence open (only while auto-open is on)
 static bool s_obst = true;       // Grid-EYE obstruction detection: blocks closing, reverses a close
 static uint32_t s_hold_s = 15;   // close this long after the doorway is clear
-static constexpr int32_t TRAVEL_COUNTS = 13588;  // full travel (set_dooroffset), for open_percent
+// Expected full travel (counts), a hint set from Home Assistant: a calibration that measures a
+// travel more than CAL_TRAVEL_TOL away is treated as failed (0 = no check). Not a door constant.
+static int32_t s_expected_travel = 0;
+static constexpr float CAL_TRAVEL_TOL = 0.02f;
 static int32_t s_open_counts = -6136;            // set_open_to (8 in = 45.2 %)
 static constexpr float COUNTS_PER_INCH = 767.0f; // the imp's set_open_to mapping (8 in = -6136, 12 in = -9204)
 static bool s_log = false;       // print every STM status line
@@ -54,6 +57,7 @@ static void loadSettings(ge::Detector &d) {
   s_auto_close = prefs.getBool("aclose", true);
   s_obst = prefs.getBool("obst", true);
   s_open_counts = prefs.getInt("opento", -6136);
+  s_expected_travel = prefs.getInt("etravel", 0);
   d.p.occ_on = prefs.getFloat("occ", 0.6f);
   d.p.occ_off = d.p.occ_on * 0.58f;
   d.p.on_score = prefs.getFloat("on2", 1.0f);
@@ -67,6 +71,7 @@ static void saveSettings(const ge::Detector &d) {
   prefs.putBool("aclose", s_auto_close);
   prefs.putBool("obst", s_obst);
   prefs.putInt("opento", s_open_counts);
+  prefs.putInt("etravel", s_expected_travel);
   prefs.putFloat("occ", d.p.occ_on);
   prefs.putFloat("on2", d.p.on_score);
   prefs.putFloat("off2", d.p.off_score);
@@ -128,6 +133,9 @@ static constexpr int RECAL_MAX = 3;
 static constexpr uint32_t RECAL_CLEAR_MS = 10000, RECAL_RETRY_MS = 180000;
 static int recal_tries = 0;
 static uint32_t recal_next = 0;
+static bool cal_bad = false;        // the STM is zeroed, but by a calibration we rejected
+static bool open_after_cal = false; // an open came in during a calibration: run it at the end
+static void calEnded();
 static uint32_t cal_start = 0;
 static bool fault = false;
 static String fault_why;
@@ -243,6 +251,7 @@ static void onBoot() {
                                                    : "FAILED: STM rebooted mid-run");
     if (!closed_stall && recal_tries >= RECAL_MAX) raiseFault("calibration failed " + String(recal_tries) + " times");
     else if (!closed_stall) OUT.printf("# calibration: will retry (%d/%d so far)\n", recal_tries, RECAL_MAX);
+    calEnded();
   }
   q.clear();
   obstr_sent = false;  // the STM's flag restarts with it
@@ -319,20 +328,34 @@ static void onStatus() {
   if (stm::moving(stm::phase(s.U)) && cur_now > move_peak) move_peak = cur_now;
   last_status_ms = millis();
   if (s_log) OUT.printf("# st U=%X Z=%d dest=%d H=%X p=%d K=%d\n", s.U, s.Z, s.dest, s.H, s.p, s.K);
-  if (s.Z & 1) {
+  if ((s.Z & 1) && !cal_bad) {
     if (pos_know != POS_KNOWN) {
       pos_know = POS_KNOWN;
       pos_why = zero_inferred ? "zeroed as closed after a reboot at the closed stall" : "zeroed";
     }
   } else if (pos_know == POS_KNOWN) {
     pos_know = POS_UNKNOWN;
-    pos_why = "STM lost its zero";
+    pos_why = cal_bad ? "calibration rejected" : "STM lost its zero";
   }
   // STM running but not set up (e.g. it restarted while we weren't listening): set it up.
   if (!(s.Z & 2) && !configuring && !calibrating && millis() - last_cfg_ms > 30000) pushConfig(false);
   if (calibrating && s.Z == 3 && !stm::moving(stm::phase(s.U)) && stm::phase(s.U) != stm::PH_UNKNOWN) {
     calibrating = false;
-    OUT.printf("# calibration: done, K=%d p=%d\n", s.K, s.p);
+    float off = s_expected_travel > 0 ? fabsf((float)s.K - s_expected_travel) / s_expected_travel : 0;
+    if (off > CAL_TRAVEL_TOL) {
+      // e.g. a pass that stopped on something short of the end: the zero is wrong, so is every
+      // position after it. Don't use it; recalibrate once the doorway is clear.
+      cal_bad = true;
+      pos_know = POS_UNKNOWN;
+      pos_why = "calibration rejected";
+      recal_next = millis() + RECAL_CLEAR_MS;
+      OUT.printf("# calibration: REJECTED, travel K=%d is %.1f%% off the expected %d (retry %d/%d)\n", s.K,
+                 off * 100, (int)s_expected_travel, recal_tries, RECAL_MAX);
+      if (recal_tries >= RECAL_MAX) raiseFault("calibration travel wrong " + String(recal_tries) + " times");
+    } else {
+      OUT.printf("# calibration: done, K=%d p=%d%s\n", s.K, s.p, s_expected_travel > 0 ? " (travel as expected)" : "");
+    }
+    calEnded();
   }
   onPhase(stm::phase(s.U), s.p);
 }
@@ -418,9 +441,12 @@ static void cancelPendingClose(const char *why) {
 
 static void requestOpen(const char *why, bool force) {
   cancelPendingClose(why);
-  if (calibrating) {  // an open wins; recoverPosition() retries the calibration later
-    calibrating = false;
-    OUT.printf("# calibration interrupted by an open (%s)\n", why);
+  if (calibrating) {
+    // The STM doesn't abort auto_zero: a command mid-run is taken as reaching the end stop and
+    // leaves a wrong zero (2026-11-22 12:40:59: travel 11137, door 3" short). Open when it ends.
+    if (!open_after_cal) OUT.printf("# open (%s) during the calibration: will open when it ends (~90 s max)\n", why);
+    open_after_cal = true;
+    return;
   }
   // Presence during a reversal is what blocked the close, not a request to stay open: once the
   // doorway is clear the close continues. Only an explicit open (HA, console) or a fault keeps it.
@@ -703,7 +729,11 @@ static void autoLogic() {
 // ---------- settings API ----------
 // Validates every key first, then applies all of them (or none). Unknown keys and out-of-range
 // values are rejected, never clamped silently. Every change is logged (and so goes to syslog).
-static float openPercent() { return roundf(-s_open_counts * 1000.0f / TRAVEL_COUNTS) / 10.0f; }
+// Full travel: as the STM measured it, else the expected travel hint, else unknown (0).
+static int32_t travel() { return P.st.K > 0 ? P.st.K : s_expected_travel; }
+// For setting ranges when the travel isn't known: a generous bound (the STM's own range limits apply).
+static float travelOr() { return travel() > 0 ? travel() : 40000.0f; }
+static float openPercent() { return travel() > 0 ? roundf(-s_open_counts * 1000.0f / travel()) / 10.0f : 0; }
 static float openInches() { return roundf(-s_open_counts * 10.0f / COUNTS_PER_INCH) / 10.0f; }
 
 static bool applySettings(const char *body, String &err) {
@@ -711,7 +741,7 @@ static bool applySettings(const char *body, String &err) {
   if (deserializeJson(doc, body) || !doc.is<JsonObject>()) { err = "body must be a JSON object"; return false; }
   bool auto_open = s_auto, auto_close = s_auto_close, obst = s_obst;
   uint32_t hold = s_hold_s;
-  int32_t open_counts = s_open_counts;
+  int32_t open_counts = s_open_counts, etravel = s_expected_travel;
   float pres = det.p.on_score, occ = det.p.occ_on, noise = det.p.noise_c;
   auto num = [&](JsonVariant v, const char *k, float lo, float hi, float &out) {
     if (!v.is<float>() && !v.is<int>()) { err = String(k) + " must be a number"; return false; }
@@ -734,12 +764,20 @@ static bool applySettings(const char *body, String &err) {
     else if (!strcmp(k, "auto_close")) ok = flag(v, k, auto_close);
     else if (!strcmp(k, "obstruction_detection")) ok = flag(v, k, obst);
     else if (!strcmp(k, "hold_s")) { ok = num(v, k, 3, 600, f); hold = (uint32_t)lroundf(f); }
-    else if (!strcmp(k, "open_percent")) { ok = num(v, k, 15, 95, f); open_counts = -lroundf(f * TRAVEL_COUNTS / 100.0f); }
+    else if (!strcmp(k, "open_percent")) {
+      if (travel() <= 0) { err = "open_percent: travel not known yet"; ok = false; }
+      else { ok = num(v, k, 15, 95, f); open_counts = -lroundf(f * travel() / 100.0f); }
+    }
     else if (!strcmp(k, "open_inches")) {
-      ok = num(v, k, 0.15f * TRAVEL_COUNTS / COUNTS_PER_INCH, 0.95f * TRAVEL_COUNTS / COUNTS_PER_INCH, f);
+      ok = num(v, k, 0.15f * travelOr() / COUNTS_PER_INCH, 0.95f * travelOr() / COUNTS_PER_INCH, f);
       open_counts = -lroundf(f * COUNTS_PER_INCH);
     }
-    else if (!strcmp(k, "open_counts")) { ok = num(v, k, -0.95f * TRAVEL_COUNTS, -0.15f * TRAVEL_COUNTS, f); open_counts = lroundf(f); }
+    else if (!strcmp(k, "open_counts")) { ok = num(v, k, -0.95f * travelOr(), -0.15f * travelOr(), f); open_counts = lroundf(f); }
+    else if (!strcmp(k, "expected_travel")) {
+      ok = num(v, k, 0, 40000, f);
+      etravel = lroundf(f);
+      if (ok && etravel != 0 && etravel < 2000) { err = "expected_travel: 0 (no check) or 2000..40000"; ok = false; }
+    }
     else if (!strcmp(k, "presence_threshold")) ok = num(v, k, 0.3f, 10, pres);
     else if (!strcmp(k, "occupied_threshold")) ok = num(v, k, 0.2f, 5, occ);
     else if (!strcmp(k, "noise_c")) ok = num(v, k, 0.2f, 2, noise);
@@ -756,12 +794,14 @@ static bool applySettings(const char *body, String &err) {
   logChange("obstruction_detection", s_obst ? "on" : "off", obst ? "on" : "off");
   logChange("hold_s", String(s_hold_s), String(hold));
   logChange("open_counts", String(s_open_counts), String(open_counts));
+  logChange("expected_travel", String(s_expected_travel), String(etravel));
   logChange("presence_threshold", String(det.p.on_score, 2), String(pres, 2));
   logChange("occupied_threshold", String(det.p.occ_on, 2), String(occ, 2));
   logChange("noise_c", String(det.p.noise_c, 2), String(noise, 2));
-  if (s_obst && !obst) OUT.println("# WARNING: obstruction detection OFF: only the STM's current limit stops a close");
+  if (s_obst && !obst) OUT.println("# WARNING: obstruction detection OFF: only the STM's own effort detection stops a close");
   bool open_changed = open_counts != s_open_counts;
   s_auto = auto_open; s_auto_close = auto_close; s_obst = obst; s_hold_s = hold; s_open_counts = open_counts;
+  s_expected_travel = etravel;
   det.p.on_score = pres; det.p.off_score = pres * 0.6f;
   det.p.occ_on = occ; det.p.occ_off = occ * 0.58f;
   det.p.noise_c = noise;
@@ -850,6 +890,8 @@ static void apiPoll() {
   sn.open_counts = s_open_counts;
   sn.open_percent = openPercent();
   sn.open_inches = openInches();
+  sn.expected_travel = s_expected_travel;
+  sn.travel = P.st.K;
   sn.motor_current = cur_now;
   sn.last_move_peak = last_move_peak;
   sn.presence_th = det.p.on_score;
@@ -922,9 +964,16 @@ static void startCal(const char *why) {
   motion("auto_zero", why, true);
   obstr_sent = rev_keep = false;
   calibrating = true;
+  cal_bad = false;
   cal_start = millis();
   zero_inferred = false;
   OUT.printf("# calibration (%s): auto_zero started (retracts fully, then closes; ~90 s)\n", why);
+}
+
+static void calEnded() {
+  if (!open_after_cal) return;
+  open_after_cal = false;
+  requestOpen("open requested during the calibration", true);
 }
 
 static void recoverPosition(uint32_t now) {
@@ -1022,11 +1071,15 @@ static void supervise() {
       }
     }
   }
-  if (calibrating && occupiedAny()) {
-    motion("stop", "calibration aborted");
-    calibrating = false;
-    OUT.println("# calibration: ABORTED, something in the doorway");
+  // No `stop` during a calibration: the STM takes it as the end stop (wrong zero). Its passes run
+  // at reduced force and stall on an obstacle; a pass cut short shows up as a wrong travel and is
+  // rejected (expected_travel).
+  static bool cal_occ_said = false;
+  if (calibrating && occupiedAny() && !cal_occ_said) {
+    cal_occ_said = true;
+    OUT.println("# calibration: doorway occupied; the STM's reduced-force pass continues, travel will be checked");
   }
+  if (!calibrating) cal_occ_said = false;
 }
 
 // ---------- console ----------

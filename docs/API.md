@@ -37,6 +37,7 @@ Commands are acknowledged in ~0.1-0.2 s (measured); the move itself takes ~5-8 s
   open ≈ -6190).
 - `presence_age_ms`, `occupied_age_ms`: milliseconds since presence / occupied (either detector) was last true; `-1` if not since boot. A poller can use these to see a visit shorter than its poll interval.
 - `close_pending`: a close is waiting for the doorway to clear.
+- `travel_counts`: full travel as the motor controller last measured it.
 - `fault`: `null` or the latched fault (the door is then held open).
 - `presence` (someone wants out), `occupied` (doorway not clear; blocks closing), `auto`
   (local Grid-EYE auto-open/close), `hold` (opened by HA, held), `grideye_ok`.
@@ -59,5 +60,6 @@ Commands are acknowledged in ~0.1-0.2 s (measured); the move itself takes ~5-8 s
 | `presence_threshold` | 0.3..10 | detector score that means "a dog wants out" (lower = more sensitive) |
 | `occupied_threshold` | 0.2..5, <= presence | the safety level: doorway not clear |
 | `noise_c` | 0.2..2 | per-pixel noise floor (°C) for the score |
+| `expected_travel` | 0, or 2000..40000 | the door's full travel in encoder counts: a calibration measuring more than 2 % off is rejected and retried (0 = no check) |
 
 Console only (`nc wayzn-esp.local 23`, first line `auth <api_token>`): calibration, fault clear, raw STM commands.
