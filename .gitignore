@@ -1,0 +1,26 @@
+
+# Secrets
+*.env
+wayzn_config.json
+.wayzn_*cache*.json
+
+.DS_Store
+__pycache__/
+.venv/
+
+# PlatformIO
+.pio/
+tools/uart-sniffer/platformio-device-monitor-*.log
+
+# Local secrets (Wi-Fi / OTA passwords)
+tools/uart-sniffer/secrets.ini
+
+# Phone photos keep GPS and device metadata: never commit originals (strip first)
+*.HEIC
+*.heic
+
+# Wayzn's proprietary firmware (flash dumps, decompiles): never published
+firmware-dumps/
+
+# Local capture logs (tools/uart-sniffer/capture.py)
+captures/
