@@ -27,7 +27,7 @@ board and the door keeps working, entirely on your own network.
 - **All open.** Firmware, wiring, measurements and the door's protocol are documented
   here, so you can fix and improve your own door.
 
-<p align="center"><img src="docs/images/ha-controls.png" width="380" alt="The door's controls and settings as shown by the Home Assistant integration: auto open, open and close, auto close, hold open time, obstruction detection, open position in inches, presence and occupied thresholds"></p>
+<p align="center"><img src="docs/images/ha-controls.png" width="380" alt="The door in Home Assistant. Controls: open and close, auto open, clear fault. Sensors: fault, obstruction, presence. Configuration: auto close, expected travel, hold open time, obstruction detection, occupied threshold, open position in inches, presence threshold. Diagnostic: last move effort, travel"></p>
 
 ## How it sees your dog
 
