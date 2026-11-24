@@ -221,7 +221,13 @@ static uint32_t g2_occ_since = 0, g2_pres_since = 0, g2_would_block = 0, g2_woul
 // Stage 2 (docs/DETECTION-RESEARCH.md): the doorway counts as occupied if EITHER detector says so.
 // This can only block or reverse more closes, never fewer. v2 sees a small dog that warms a
 // single pixel by ~1 C, which the original detector averages away.
-static bool occupiedAny() { return ge_last.occupied || g2.occupied; }
+// Sensor warm-up after a cold start (no backgrounds kept in RTC memory): the AMG88xx drifts by up to
+// +3 C over its first minutes (2026-11-24, two power-ups: every pixel warm within 25 s, read as a dog;
+// the second opened the door by itself and held it there). For GE_WARMUP_MS the detectors are not fed;
+// the doorway counts as occupied (no closing, no calibration) but never as presence (no auto-open).
+static constexpr uint32_t GE_WARMUP_MS = 90000;
+static bool ge_warming = true;  // cleared when RTC backgrounds are restored, or after the warm-up
+static bool occupiedAny() { return ge_last.occupied || g2.occupied || ge_warming; }
 static uint32_t last_present_seen = 0, last_occ_seen = 0;  // for the API: how long ago, so a short
 static bool present_seen = false, occ_seen = false;         // visit between two polls still shows
 static float frame[64];
@@ -601,7 +607,15 @@ static void requestOpen(const char *why, bool force) {
 
 static bool requestClose(const char *why, String &no) {
   if (fault) { no = "fault latched: " + fault_why; return false; }
-  if (pos_know != POS_KNOWN) { no = String("position ") + (pos_know == POS_INFERRED ? "inferred, not zeroed" : "unknown"); return false; }
+  if (pos_know == POS_UNKNOWN) {
+    // The calibration ends closed: run it instead of refusing (same checks as a requested one; a
+    // "doorway not clear" refusal becomes a pending close for HA).
+    if (calRefused(no)) return false;
+    api_hold = false;
+    startCal("close requested, position unknown");
+    return true;
+  }
+  if (pos_know != POS_KNOWN) { no = "position inferred, not zeroed"; return false; }
   if (!ge_ok || !det.ready) { no = "Grid-EYE not reading: can't see the doorway"; return false; }
   if (s_obst && occupiedAny()) { no = "doorway not clear"; return false; }
   if (configuring) { no = "STM still being configured"; return false; }
@@ -729,12 +743,13 @@ static void relearnBackground(const char *why) {
 }
 
 // The doorway reads occupied but the whole field has warmed (drift, not a visit): relearn, while
-// the door is closed or its position unknown and nothing moves. Never while open: there a relearn
-// could let an auto-close through, and a stuck "occupied" only keeps the door open.
+// the door is closed or its position unknown and nothing moves. Never while open with a known position:
+// there a relearn could let an auto-close through, and a stuck "occupied" only keeps the door open.
 static void driftCheck() {
   bool fire = drift.update(frame, occupiedAny(), millis());
-  bool still = (phase == stm::PH_CLOSED || phase == stm::PH_UNKNOWN || phase == stm::PH_UNCONFIGURED ||
-                phase == stm::PH_FAILED) && !calibrating && !configuring;
+  // With the position unknown no close is possible either way (only the calibration moves the door).
+  bool still = (phase == stm::PH_CLOSED || pos_know == POS_UNKNOWN) && !stm::moving(phase) && !calibrating &&
+               !configuring;
   if (!fire || !still) return;
   char why[120];
   snprintf(why, sizeof why, "scene-wide drift: 3/4 of the pixels +%.2f C or more over the last clear scene for %lu s",
@@ -808,6 +823,20 @@ static void gridEye() {
   memcpy(prevf, frame, sizeof prevf);
   if (!ge_ok) { ge_ok = true; OUT.println("# Grid-EYE: reading"); }
   ge_fail = 0;
+  if (ge_warming) {
+    static uint32_t warm_t0 = 0;
+    if (!warm_t0) {
+      warm_t0 = millis() ? millis() : 1;
+      OUT.printf("# Grid-EYE: cold start, warming up %lu s before learning the doorway (counts as occupied, no presence)\n",
+                 (unsigned long)(GE_WARMUP_MS / 1000));
+    }
+    if (millis() - warm_t0 < GE_WARMUP_MS) return;
+    ge_warming = false;
+    det.reset();
+    det2.reset();
+    drift.reset();
+    OUT.println("# Grid-EYE: warmed up; learning the empty doorway (2 s)");
+  }
   bool was = ge_last.present, wasOcc = ge_last.occupied;
   ge_last = det.update(frame);
   recordFrame();
@@ -1144,6 +1173,7 @@ static void restoreRtcState() {
   fault_why = rtc_st.fault_why;
   if (fault) fault_try_ms = millis();
   if (rtc_st.bg_ok) {
+    ge_warming = false;
     det.loadBackground(rtc_st.bg1);
     det2.loadBackground(rtc_st.bg2, rtc_st.var2);
   }
@@ -1167,6 +1197,7 @@ static void startCal(const char *why) {
 static bool calRefused(String &no) {
   if (fault) no = "a fault is latched: clear it first";
   else if (!ge_ok) no = "Grid-EYE not reading";
+  else if (ge_warming) no = "Grid-EYE warming up after a cold start (90 s)";
   else if (ge_last.present || occupiedAny()) no = "doorway not clear";
   else if (calibrating) no = "already calibrating";
   else if (configuring) no = "still configuring";

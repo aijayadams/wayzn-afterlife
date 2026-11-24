@@ -49,8 +49,13 @@ Behaviour:
   whole (seen after a cold power-up: every pixel +0.3..+2.1 C) stays "occupied" for good and blocks
   the calibration. When 3/4 of the pixels have warmed >= 0.25 C over the last clear scene for 60 s
   while occupied (a dog warms 1-6 pixels, a person ~10), both detectors relearn the background. Only
-  with the door closed or its position unknown and nothing moving: never while open (a stuck
-  "occupied" there only keeps the door open). `gebg` / `POST /api/relearn` do it by hand.
+  with the door closed or its position unknown and nothing moving: never while open with a known
+  position (a stuck "occupied" there only keeps the door open).
+- Sensor warm-up: after a cold start (no backgrounds in RTC memory) the Grid-EYE is not used for
+  90 s: the doorway counts as occupied (no closing, no calibration) but never as presence (no
+  auto-open). Both power-ups on 2026-11-24 drifted +1..+3 C within 25 s, read as a dog.
+- A close with the position unknown runs the calibration (it ends closed) under the same checks as
+  `POST /api/calibrate`; "doorway not clear" becomes a pending close for HA. `gebg` / `POST /api/relearn` do it by hand.
 - `POST /api/calibrate` (HA "Recalibrate"): auto_zero now; refused unless the door is still, the
   doorway clear, the Grid-EYE reading and no fault latched.
 - Telnet console: the first line must be `auth <api_token>`; anything else disconnects.
