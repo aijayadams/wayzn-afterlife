@@ -73,5 +73,6 @@ Commands are acknowledged in ~0.1-0.2 s (measured); the move itself takes ~5-8 s
 | `noise_c` | 0.2..2 | per-pixel noise floor (°C) for the score |
 | `expected_travel` | 0, or 2000..40000 | the door's full travel in encoder counts: a calibration measuring more than 2 % off is rejected and retried, and the travel used to zero as closed when the STM restarts at the closed end mid-calibration (0 = none: no check, and that zero isn't inferred) |
 | `expected_travel_inches` | 0, or 2.6..52.1 | the same, in inches (767 counts per inch) |
+| `stall_allowance`, `stall_allowance_inches` | 0..200 counts, 0..0.26 in | when a calibration ends by stalling at the closed end, that spot is zeroed this far further closed than a normal close's end (-72), so later closes stop short of it. 0 = zero it at -72 (closes then reversed at the very end on our door; 30 = 0.039 in fixed it) |
 
 Console only (`nc wayzn-esp.local 23`, first line `auth <api_token>`): calibration, fault clear, raw STM commands.

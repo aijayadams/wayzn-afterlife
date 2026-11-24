@@ -35,7 +35,7 @@ struct Snapshot {
   bool auto_close = true, obst = true, close_pending = false;
   int32_t presence_age_ms = -1, occupied_age_ms = -1;  // since last true; -1 = never
   uint32_t hold_s = 15;
-  int open_counts = 0, expected_travel = 0, travel = 0;
+  int open_counts = 0, expected_travel = 0, travel = 0, stall_allowance = 0;
   int motor_current = 0, last_move_peak = -1;  // mA (the STM's H / `c` / move summaries; docs/STM-FIRMWARE.md)
   int last_move_effort = -1, effort_current = 0, effort_limit = 0;  // % of the STM's limit; -1 = none yet
   float travel_inches = -1, expected_travel_inches = 0;
@@ -121,7 +121,7 @@ static void handleStatus() {
            "\"travel_inches\":%.2f,\"last_move_effort\":%d,\"effort_current\":%d,\"effort_limit\":%d,\"profile_stored\":%s,"
            "\"motor_current_a\":%.3f,\"last_move_current_a\":%.3f,\"last_move_current_limit_a\":%.3f,"
            "\"settings\":{\"auto_open\":%s,\"auto_close\":%s,\"obstruction_detection\":%s,\"hold_s\":%lu,"
-           "\"open_percent\":%.1f,\"open_inches\":%.1f,\"open_counts\":%d,\"expected_travel\":%d,\"expected_travel_inches\":%.2f,\"presence_threshold\":%.2f,\"occupied_threshold\":%.2f,"
+           "\"open_percent\":%.1f,\"open_inches\":%.1f,\"open_counts\":%d,\"expected_travel\":%d,\"expected_travel_inches\":%.2f,\"stall_allowance\":%d,\"stall_allowance_inches\":%.3f,\"presence_threshold\":%.2f,\"occupied_threshold\":%.2f,"
            "\"noise_c\":%.2f}}",
            s.state, s.detail, s.position, s.p, s.fault[0] ? "\"" : "", s.fault[0] ? jsonEscape(s.fault).c_str() : "null",
            s.fault[0] ? "\"" : "", s.presence ? "true" : "false", s.occupied ? "true" : "false", (long)s.presence_age_ms, (long)s.occupied_age_ms,
@@ -132,7 +132,7 @@ static void handleStatus() {
            s.motor_current / 1000.0f, s.last_move_peak < 0 ? -1.0f : s.last_move_peak / 1000.0f,
            s.effort_limit > 0 ? s.effort_limit / 1000.0f : -1.0f,
            s.auto_mode ? "true" : "false", s.auto_close ? "true" : "false", s.obst ? "true" : "false",
-           (unsigned long)s.hold_s, s.open_percent, s.open_inches, s.open_counts, s.expected_travel, s.expected_travel_inches, s.presence_th, s.occupied_th, s.noise_c);
+           (unsigned long)s.hold_s, s.open_percent, s.open_inches, s.open_counts, s.expected_travel, s.expected_travel_inches, s.stall_allowance, s.stall_allowance / 767.0f, s.presence_th, s.occupied_th, s.noise_c);
   web->send(200, "application/json", b);
 }
 

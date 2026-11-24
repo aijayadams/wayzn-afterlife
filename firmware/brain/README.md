@@ -69,7 +69,10 @@ Behaviour:
   reduced force, or browns the STM out): still for 5 s, the brain resets the STM. A reboot in that
   pass past 85 % of `expected_travel` is the closed end: zeroed as closed with that travel
   (inferred); otherwise (or with no `expected_travel`) the position stays unknown and the
-  calibration is retried. A calibration timeout resets the STM and opens.
+  calibration is retried. A calibration timeout resets the STM and opens. The stall spot is zeroed
+  `stall_allowance` counts further closed than a normal close's end (-72): the pass had jammed the
+  door into the frame, and zeroing it at -72 made the next closes overcurrent-reverse at p=-80
+  (103-118 %). 30 on our door: closes then end at -72, 52-54 %.
 - No door constants in the firmware. STM setup after every STM boot: the learned effort profile
   (read back with `get_profile` after each good calibration, kept in NVS; none stored = the STM's
   default margins), the open position, `set_open_wait 15`, `set_button_op 1`, `profiled_state 1`.

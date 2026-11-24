@@ -50,6 +50,12 @@ static constexpr float CAL_TRAVEL_TOL = 0.02f;
 // closed stall lags the stall by up to 1.5 s (seen: p 12333 and 12553 for a 13588 travel), so
 // "at the closed end" is past this fraction of the expected travel.
 static constexpr float CAL_END_FRAC = 0.85f;
+// At the calibration's closed stall the door is jammed into the frame harder than a normal close
+// leaves it (the pass pushed for seconds). Zeroing that spot as the normal closed position (-72)
+// made every following close try to reach it: overcurrent reversal at p=-80, 103-118 % (2026-11-23
+// 13:21, 2026-11-24 13:52, 14:02, 14:32), while closes after a measured calibration end at -68..-71,
+// 28-53 %. So the stall spot is zeroed this many counts further closed. Set from HA (door-specific).
+static int32_t s_stall_allow = 0;
 static int32_t s_open_counts = -6136;            // set_open_to (8 in = 45.2 %)
 static constexpr float COUNTS_PER_INCH = 767.0f; // the imp's set_open_to mapping (8 in = -6136, 12 in = -9204)
 static bool s_log = false;       // print every STM status line
@@ -80,6 +86,7 @@ static void loadSettings(ge::Detector &d) {
   s_obst = prefs.getBool("obst", true);
   s_open_counts = prefs.getInt("opento", -6136);
   s_expected_travel = prefs.getInt("etravel", 0);
+  s_stall_allow = prefs.getInt("stallal", 0);
   prof_ok = prefs.getBytes("prof", prof_tab, sizeof prof_tab) == sizeof prof_tab && profValid(prof_tab);
   d.p.occ_on = prefs.getFloat("occ", 0.6f);
   d.p.occ_off = d.p.occ_on * 0.58f;
@@ -95,6 +102,7 @@ static void saveSettings(const ge::Detector &d) {
   prefs.putBool("obst", s_obst);
   prefs.putInt("opento", s_open_counts);
   prefs.putInt("etravel", s_expected_travel);
+  prefs.putInt("stallal", s_stall_allow);
   prefs.putFloat("occ", d.p.occ_on);
   prefs.putFloat("on2", d.p.on_score);
   prefs.putFloat("off2", d.p.off_score);
@@ -164,6 +172,7 @@ static stm::DoorPhase phase = stm::PH_UNKNOWN;
 static uint32_t phase_since = 0;
 static bool configuring = false, zero_after_config = false, zero_inferred = false;
 static int32_t zero_k = 0;  // travel to set before an inferred zero (set_dooroffset)
+static bool zero_stall = false;  // that zero is the calibration's closed stall (s_stall_allow applies)
 static uint32_t last_cfg_ms = 0;
 static bool calibrating = false;
 // Position recovery: after a start (power cut, STM reboot) the STM has no position. The brain
@@ -322,6 +331,7 @@ static void onBoot() {
     k = s.K > 0 ? s.K : s_expected_travel;
   }
   bool closed_stall = k > 0;
+  zero_stall = closed_stall && have_status && s.U == 0x14;
   pos_know = closed_stall ? POS_INFERRED : POS_UNKNOWN;
   if (closed_stall) pos_why = "STM rebooted at the closed stall";
   OUT.printf("# STM BOOT #%u (last U=%X p=%d): position %s\n", (unsigned)stm_boots, s.U, s.p,
@@ -929,7 +939,7 @@ static bool applySettings(const char *body, String &err) {
   if (deserializeJson(doc, body) || !doc.is<JsonObject>()) { err = "body must be a JSON object"; return false; }
   bool auto_open = s_auto, auto_close = s_auto_close, obst = s_obst;
   uint32_t hold = s_hold_s;
-  int32_t open_counts = s_open_counts, etravel = s_expected_travel;
+  int32_t open_counts = s_open_counts, etravel = s_expected_travel, stall_allow = s_stall_allow;
   float pres = det.p.on_score, occ = det.p.occ_on, noise = det.p.noise_c;
   auto num = [&](JsonVariant v, const char *k, float lo, float hi, float &out) {
     if (!v.is<float>() && !v.is<int>()) { err = String(k) + " must be a number"; return false; }
@@ -975,6 +985,8 @@ static bool applySettings(const char *body, String &err) {
         ok = false;
       }
     }
+    else if (!strcmp(k, "stall_allowance")) { ok = num(v, k, 0, 200, f); stall_allow = lroundf(f); }
+    else if (!strcmp(k, "stall_allowance_inches")) { ok = num(v, k, 0, 200 / COUNTS_PER_INCH, f); stall_allow = lroundf(f * COUNTS_PER_INCH); }
     else if (!strcmp(k, "presence_threshold")) ok = num(v, k, 0.3f, 10, pres);
     else if (!strcmp(k, "occupied_threshold")) ok = num(v, k, 0.2f, 5, occ);
     else if (!strcmp(k, "noise_c")) ok = num(v, k, 0.2f, 2, noise);
@@ -992,6 +1004,7 @@ static bool applySettings(const char *body, String &err) {
   logChange("hold_s", String(s_hold_s), String(hold));
   logChange("open_counts", String(s_open_counts), String(open_counts));
   logChange("expected_travel", String(s_expected_travel), String(etravel));
+  logChange("stall_allowance", String(s_stall_allow), String(stall_allow));
   logChange("presence_threshold", String(det.p.on_score, 2), String(pres, 2));
   logChange("occupied_threshold", String(det.p.occ_on, 2), String(occ, 2));
   logChange("noise_c", String(det.p.noise_c, 2), String(noise, 2));
@@ -999,6 +1012,7 @@ static bool applySettings(const char *body, String &err) {
   bool open_changed = open_counts != s_open_counts;
   s_auto = auto_open; s_auto_close = auto_close; s_obst = obst; s_hold_s = hold; s_open_counts = open_counts;
   s_expected_travel = etravel;
+  s_stall_allow = stall_allow;
   det.p.on_score = pres; det.p.off_score = pres * 0.6f;
   det.p.occ_on = occ; det.p.occ_off = occ * 0.58f;
   det.p.noise_c = noise;
@@ -1107,6 +1121,7 @@ static void apiPoll() {
   sn.open_percent = openPercent();
   sn.open_inches = openInches();
   sn.expected_travel = s_expected_travel;
+  sn.stall_allowance = s_stall_allow;
   sn.travel = P.st.K;
   sn.travel_inches = P.st.K > 0 ? roundf(P.st.K * 100.0f / COUNTS_PER_INCH) / 100.0f : -1;
   sn.expected_travel_inches = roundf(s_expected_travel * 100.0f / COUNTS_PER_INCH) / 100.0f;
@@ -1292,9 +1307,11 @@ static void supervise() {
     configuring = false;
     if (zero_after_config) {
       send(String("set_dooroffset ") + zero_k);
-      send("zero -72 14");
+      int zp = -72 + (zero_stall ? (int)s_stall_allow : 0);
+      send(String("zero ") + zp + " 14");
       zero_inferred = true;
-      OUT.println("# config: done; zero as closed (inferred)");
+      OUT.printf("# config: done; zero as closed (inferred%s) at p=%d\n",
+                 zero_stall ? ", calibration stall: stall_allowance applied" : "", zp);
     } else {
       OUT.println("# config: done; position unknown until `cal`");
     }
