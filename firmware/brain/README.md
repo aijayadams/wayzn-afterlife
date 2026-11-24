@@ -71,6 +71,8 @@ Behaviour:
   The travel comes from the STM's own measurement, or `expected_travel` for an inferred zero.
 - Effort: each STM move summary gives the current and the STM's current limit at that moment;
   `last_move_effort` is the highest current/limit (%) of a move.
+- Currents are mA (the STM's `H`, `c` and move summaries; decoded from its firmware, 1.1 V/A sense
+  chain). The API also gives them in amps (`motor_current_a`, `last_move_current_a`, `last_move_current_limit_a`).
 - No OTA while the door is moving.
 - Detection: the doorway is occupied (no closing; a close reverses) if either the original detector
   (`src/presence.h`) or v2 (`src/presence2.h`, docs/DETECTION-RESEARCH.md) says so. Presence (auto-open)

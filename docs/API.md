@@ -48,8 +48,12 @@ Commands are acknowledged in ~0.1-0.2 s (measured); the move itself takes ~5-8 s
   limit at that moment (from its move summaries; the limit follows the learned profile). Over 100 %
   for ~350 ms is the STM's own overcurrent reversal. -1 until a move. `effort_current`,
   `effort_limit`: the raw values behind it.
-- `motor_current`: live motor current (STM32 units, scale in amps unknown; ~30 at rest, ~450-800
-  while moving). `last_move_peak_current`: peak of the last move (-1 until a move).
+- `motor_current`: live motor current in mA (the STM's `H` / `c`; decoded from its firmware, 1.1 V/A
+  sense chain, docs/STM-FIRMWARE.md; ~30 at rest, ~450-800 while moving). `last_move_peak_current`:
+  peak of the last move, mA (-1 until a move). `effort_current`, `effort_limit` are mA too.
+- `motor_current_a`, `last_move_current_a` (peak of the last move), `last_move_current_limit_a` (the
+  STM's limit at the move's highest effort): the same in amps (-1 until a move). A normal close ends
+  ~0.40 A; the STM's obstruction limit is ~0.67 A; the highest seen 0.747 A (2026-11-22 reversal).
 - `status_age_ms`: age of the last STM status line. `uptime_s`: ESP32 uptime.
 - `settings`: the current settings, below.
 

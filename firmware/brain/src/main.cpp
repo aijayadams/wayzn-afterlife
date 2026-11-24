@@ -235,7 +235,7 @@ static bool obstr_sent = false;   // what we last told the STM
 static bool rev_keep = false;
 static uint32_t obstr_set_ms = 0, last_clear_ms = 0;
 static int cur_U = -1;  // STM control state, from status lines and (sooner) move summaries
-static int cur_now = 0, move_peak = 0, last_move_peak = -1;  // motor current (STM units: H / `c`)
+static int cur_now = 0, move_peak = 0, last_move_peak = -1;  // motor current, mA (H / `c` / move summaries)
 // Effort: motor current as a % of the STM's own current limit at that moment, from its move
 // summaries (printed at each state change; the limit follows the learned profile). Over 100 % for
 // ~350 ms is the STM's own overcurrent reversal. The current's scale in amps isn't known.
@@ -372,7 +372,7 @@ static void onPhase(stm::DoorPhase np, int pos) {
   if (!stm::moving(np) && stm::moving(phase)) {
     last_move_peak = move_peak;
     last_move_effort = move_effort;
-    OUT.printf("# move peak current %d; peak effort %d%% of the STM's limit\n", move_peak, move_effort);
+    OUT.printf("# move peak current %d mA; peak effort %d%% of the STM's limit\n", move_peak, move_effort);
   }
   OUT.printf("# door: %s -> %s (p=%d)\n", stm::phaseName(phase), stm::phaseName(np), pos);
   if (np == stm::PH_REVERSING) {
@@ -484,8 +484,8 @@ static void handleStmByte(char c) {
     case stm::BOOT: onBoot(); break;
     case stm::MOVE: {
       int e = P.mv.limit > 0 ? (P.mv.current * 100 + P.mv.limit / 2) / P.mv.limit : -1;
-      OUT.printf("# move: pos=%d -> state %X, current %X (limit %X, effort %d%%)\n", P.mv.pos, P.mv.state, P.mv.current,
-                 P.mv.limit, e);
+      OUT.printf("# move: pos=%d -> state %X, current %d mA (limit %d mA, effort %d%%)\n", P.mv.pos, P.mv.state,
+                 P.mv.current, P.mv.limit, e);
       if (e >= 0) {
         if (stm::moving(phase) && e > move_effort) {
           move_effort = e;
