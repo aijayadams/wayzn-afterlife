@@ -6,6 +6,7 @@ its shell and reads the Grid-EYE. Principles: AGENTS.md. STM details: docs/STM-F
 - `src/stm_parse.h`: STM output parser (status, move summaries, boot `@@`, replies, `~`).
 - `src/presence.h`: Grid-EYE presence detector (learned background, warming only, mask).
 - `src/presence2.h`: v2 Grid-EYE detector (see below).
+- `src/drift.h`: scene-wide drift watch (relearns the background when drift reads as occupied).
 - `src/api.h`: HTTP API for Home Assistant (docs/API.md).
 - `src/main.cpp`: supervisor, safety, console. `src/net.h`: Wi-Fi console + OTA.
 - `test/host_test.cpp`: host unit tests, plus a replay of UART captures through the parser and
@@ -44,6 +45,14 @@ Behaviour:
   learned as background). A power cut clears them.
 - STM silent since ESP boot: NRST pulse at 25 s, then once a minute until it talks.
 - Grid-EYE returning 20 identical frames counts as not reading.
+- Drift: both detectors stop learning while the doorway reads occupied, so a scene that warms as a
+  whole (seen after a cold power-up: every pixel +0.3..+2.1 C) stays "occupied" for good and blocks
+  the calibration. When 3/4 of the pixels have warmed >= 0.25 C over the last clear scene for 60 s
+  while occupied (a dog warms 1-6 pixels, a person ~10), both detectors relearn the background. Only
+  with the door closed or its position unknown and nothing moving: never while open (a stuck
+  "occupied" there only keeps the door open). `gebg` / `POST /api/relearn` do it by hand.
+- `POST /api/calibrate` (HA "Recalibrate"): auto_zero now; refused unless the door is still, the
+  doorway clear, the Grid-EYE reading and no fault latched.
 - Telnet console: the first line must be `auth <api_token>`; anything else disconnects.
 - Open with unknown position uses `disengage` (always drives fully open).
 - Position recovery: when the STM has no position after a start (power cut, STM reboot), the

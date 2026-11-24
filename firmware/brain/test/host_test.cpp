@@ -9,6 +9,8 @@
 #include <string>
 #include "stm_parse.h"
 #include "presence.h"
+#include "presence2.h"
+#include "drift.h"
 
 static int fails = 0;
 #define CHECK(c) do { if (!(c)) { printf("FAIL %s:%d %s\n", __FILE__, __LINE__, #c); fails++; } } while (0)
@@ -102,6 +104,11 @@ static void replayFrames(const char *path) {
   FILE *f = fopen(path, "rb");
   if (!f) return;
   ge::Detector d;
+  ge2::Detector d2;
+  ge::DriftWatch dw;
+  int drift_fires = 0;
+  uint32_t drift_max = 0;
+  float q_max = -9;
   char line[4096];
   bool was = false;
   int n = 0, on = 0;
@@ -111,12 +118,22 @@ static void replayFrames(const char *path) {
     char *p = strstr(line, " # F ");
     if (!p) continue;
     p += 5;
-    strtol(p, &p, 10);  // ms
+    uint32_t ms = (uint32_t)strtol(p, &p, 10);
     float fr[64];
     int k = 0;
     for (; k < 64; k++) { char *e; long v = strtol(p, &e, 10); if (e == p) break; fr[k] = v / 4.0f; p = e; }
     if (k != 64) continue;
     ge::Result r = d.update(fr);
+    ge2::Result r2 = d2.update(fr, true, false);
+    if (d.ready && d2.ready) {
+      if (dw.update(fr, r.occupied || r2.occupied, ms)) {
+        drift_fires++;
+        printf("%.15s DRIFT relearn q=%.2f\n", line, dw.q);
+        d.reset(); d2.reset(); dw.reset();
+      }
+      if (dw.heldMs(ms) > drift_max) drift_max = dw.heldMs(ms);
+      if (dw.q > q_max) q_max = dw.q;
+    }
     n++;
     if (r.smoothed > maxScore && !r.present) { maxScore = r.smoothed; strncpy(tmax, line, 15); }
     if (r.present != was) {
@@ -127,6 +144,8 @@ static void replayFrames(const char *path) {
   }
   fclose(f);
   if (n) printf("== frames %s: %d frames, %d presence episodes, highest smoothed score while absent %.2f at %s\n", path, n, on, maxScore, tmax);
+  if (n) printf("== drift %s: %d relearns, longest drift-like stretch %.1f s, highest quartile while occupied %.2f C\n", path,
+                drift_fires, drift_max / 1000.0f, q_max);
 }
 
 // Feed channel-B bytes from a capture line "<time> <secs> B [n] HH HH ... |ascii|".
@@ -170,8 +189,47 @@ static void replay(const char *path) {
          counts[5]);
 }
 
+// Drift watch: a scene-wide warming relearns; a dog-sized warm patch held for 10 min does not.
+static float noise() { return ((rand() % 1000) / 1000.0f - 0.5f) * 0.9f; }  // ~0.26 C sigma
+static void driftUnit() {
+  for (int pass = 0; pass < 2; pass++) {
+    ge::Detector d;
+    ge2::Detector d2;
+    ge::DriftWatch dw;
+    float base[64], fr[64];
+    for (int i = 0; i < 64; i++) base[i] = 16.5f + (i / 8 >= 6 ? 0.6f : 0.0f);
+    int fires = 0, fire_at = -1;
+    bool occ_seen = false;
+    for (int k = 0; k < 6000; k++) {  // 10 min at 10 Hz
+      for (int i = 0; i < 64; i++) {
+        float add = 0;
+        if (pass == 0) add = (k < 1800 ? k / 1800.0f : 1.0f) * (0.3f + 1.5f * (i / 8) / 7.0f);  // warm-up drift, bottom rows most
+        else if (k > 200 && (i == 34 || i == 35 || i == 26 || i == 27 || i == 42 || i == 43)) add = 2.0f;  // dog, 6 px
+        fr[i] = base[i] + add + noise();
+      }
+      ge::Result r = d.update(fr);
+      ge2::Result r2 = d2.update(fr, true, false);
+      if (!d.ready || !d2.ready) continue;
+      occ_seen |= r.occupied || r2.occupied;
+      bool fire = dw.update(fr, r.occupied || r2.occupied, (uint32_t)k * 100 + 1);
+      if (getenv("DRIFT_DBG") && k % 300 == 0) printf("  k=%d occ1=%d occ2=%d q=%.2f held=%u\n", k, r.occupied, r2.occupied, dw.q, dw.heldMs((uint32_t)k * 100 + 1));
+      if (fire) {
+        fires++;
+        if (fire_at < 0) fire_at = k;
+        d.reset(); d2.reset(); dw.reset();
+      }
+    }
+    printf("drift unit %s: occupied seen %d, relearns %d, first at %.0f s\n", pass == 0 ? "warm-up drift" : "dog 10 min",
+           occ_seen, fires, fire_at / 10.0f);
+    CHECK(occ_seen);
+    if (pass == 0) CHECK(fires >= 1 && fire_at < 3600);
+    else CHECK(fires == 0);
+  }
+}
+
 int main(int argc, char **argv) {
   unit();
+  driftUnit();
   for (int i = 1; i < argc; i++) { replay(argv[i]); replayFrames(argv[i]); }
   printf(fails ? "%d FAILED\n" : "all unit checks passed\n", fails);
   return fails != 0;

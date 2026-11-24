@@ -21,6 +21,7 @@
 #include "stm_parse.h"
 #include "presence.h"
 #include "presence2.h"
+#include "drift.h"
 #include <ArduinoJson.h>
 #include "api.h"
 
@@ -214,6 +215,8 @@ static uint32_t rtcRefSum(const RtcRef &r) {
 }
 static uint32_t ref_seq_saved = 0;
 static ge2::Result g2;
+static ge::DriftWatch drift;  // scene-wide drift read as "occupied" (src/drift.h)
+static uint32_t bg_relearns = 0;
 static uint32_t g2_occ_since = 0, g2_pres_since = 0, g2_would_block = 0, g2_would_reverse = 0;
 // Stage 2 (docs/DETECTION-RESEARCH.md): the doorway counts as occupied if EITHER detector says so.
 // This can only block or reverse more closes, never fewer. v2 sees a small dog that warms a
@@ -246,6 +249,8 @@ static void raiseFault(const String &why);
 static void requestOpen(const char *why, bool force = false);
 static void cancelMotion();
 static void clearFault(const char *who);
+static void startCal(const char *why);
+static bool calRefused(String &no);
 
 // Door state that must survive a software reset (OTA, crash, watchdog), in RTC memory: the HA
 // hold, a latched fault, the obstruction flag and post-reversal hold, and the last empty-doorway
@@ -714,6 +719,29 @@ static void captureShip() {
   }
 }
 
+// Both detectors learn their background again from the next 2 s of frames (they read clear meanwhile).
+static void relearnBackground(const char *why) {
+  det.reset();
+  det2.reset();
+  drift.reset();
+  bg_relearns++;
+  OUT.printf("# grid-eye: both detectors relearning background (2 s) (%s)\n", why);
+}
+
+// The doorway reads occupied but the whole field has warmed (drift, not a visit): relearn, while
+// the door is closed or its position unknown and nothing moves. Never while open: there a relearn
+// could let an auto-close through, and a stuck "occupied" only keeps the door open.
+static void driftCheck() {
+  bool fire = drift.update(frame, occupiedAny(), millis());
+  bool still = (phase == stm::PH_CLOSED || phase == stm::PH_UNKNOWN || phase == stm::PH_UNCONFIGURED ||
+                phase == stm::PH_FAILED) && !calibrating && !configuring;
+  if (!fire || !still) return;
+  char why[120];
+  snprintf(why, sizeof why, "scene-wide drift: 3/4 of the pixels +%.2f C or more over the last clear scene for %lu s",
+           drift.q, (unsigned long)(ge::DriftWatch::kHoldMs / 1000));
+  relearnBackground(why);
+}
+
 static void shadow() {
   bool wasP = g2.present, wasO = g2.occupied;
   g2 = det2.update(frame, phase == stm::PH_CLOSED, phase != stm::PH_UNKNOWN);
@@ -785,6 +813,7 @@ static void gridEye() {
   recordFrame();
   if (ge_last.present) { last_present_seen = millis(); present_seen = true; }
   shadow();
+  driftCheck();
   if (ge_last.occupied != wasOcc) OUT.printf("# occupied %s (score %.2f)\n", ge_last.occupied ? "ON" : "off", ge_last.smoothed);
   if (ge_last.present) last_presence_ms = millis();
   if (ge_last.present != was)
@@ -1003,6 +1032,25 @@ static void apiPoll() {
         clearFault("home assistant");
         api::finish(r, true, nullptr);
         break;
+      case api::CMD_CALIBRATE:
+        if (calRefused(no)) {
+          OUT.printf("# api: calibrate refused: %s\n", no.c_str());
+          api::finish(r, false, no.c_str());
+        } else {
+          api_hold = false;
+          startCal("home assistant");
+          api::finish(r, true, nullptr);
+        }
+        break;
+      case api::CMD_RELEARN:
+        if (stm::moving(phase) || calibrating) {
+          OUT.println("# api: relearn refused: door is moving");
+          api::finish(r, false, "door is moving");
+        } else {
+          relearnBackground("home assistant: doorway must be clear");
+          api::finish(r, true, nullptr);
+        }
+        break;
       case api::CMD_STOP:
         OUT.println("# api: stop");
         last_motion = "";
@@ -1113,6 +1161,19 @@ static void startCal(const char *why) {
   cal_start = millis();
   zero_inferred = false;
   OUT.printf("# calibration (%s): auto_zero started (retracts fully, then closes; ~90 s)\n", why);
+}
+
+// A requested calibration (console or HA): only from a still door with a clear doorway.
+static bool calRefused(String &no) {
+  if (fault) no = "a fault is latched: clear it first";
+  else if (!ge_ok) no = "Grid-EYE not reading";
+  else if (ge_last.present || occupiedAny()) no = "doorway not clear";
+  else if (calibrating) no = "already calibrating";
+  else if (configuring) no = "still configuring";
+  else if (stm::moving(phase)) no = "door is moving";
+  else if (!have_status) no = "no STM status yet";
+  else return false;
+  return true;
 }
 
 static void calEnded() {
@@ -1313,8 +1374,8 @@ static void command(String c) {
   else if (c == "close") { if (!requestClose("command", no)) OUT.printf("# close refused: %s\n", no.c_str()); }
   else if (c == "stop") { last_motion = ""; motion("stop", "command"); calibrating = false; }
   else if (c == "cal") {
-    if (ge_last.present || occupiedAny() || !ge_ok) OUT.println("# cal refused: doorway not clear / Grid-EYE not reading");
-    else if (configuring) OUT.println("# cal refused: still configuring");
+    String why;
+    if (calRefused(why)) OUT.printf("# cal refused: %s\n", why.c_str());
     else startCal("command");
   }
   else if (c == "auto on" || c == "auto off") { s_auto = c == "auto on"; saveSettings(det); printStatus(); }
@@ -1326,7 +1387,7 @@ static void command(String c) {
   else if (c == "ge") printFrame();
   else if (c == "ge on" || c == "ge off") ge_stream = c == "ge on";
   else if (c == "ge raw on" || c == "ge raw off") ge_raw = c == "ge raw on";
-  else if (c == "gebg") { det.reset(); det2.reset(); OUT.println("# grid-eye: both detectors relearning background (2 s): doorway must be clear"); }
+  else if (c == "gebg") relearnBackground("console: doorway must be clear");
   else if (c == "fault clear") clearFault("console");
   else if (c == "cfg") pushConfig(false);
   else if (c == "profile") {

@@ -4,6 +4,8 @@
 //   POST /api/open     -> {"ok":true}                     (always accepted: never lock a dog out)
 //   POST /api/close    -> {"ok":false,"reason":"doorway not clear"}  when it isn't safe
 //   POST /api/stop
+//   POST /api/calibrate -> auto_zero now (409 with a reason unless still, clear and fault-free)
+//   POST /api/relearn  -> both Grid-EYE detectors relearn the background (doorway must be clear)
 //   POST /api/auto     body {"on":true|false} -> Grid-EYE auto-open on or off (saved)
 //   POST /api/settings body: any subset of the "settings" object in /api/status -> all or nothing
 // Every request needs `Authorization: Bearer <API_TOKEN>` (secrets.ini). LAN only, plain HTTP.
@@ -44,7 +46,7 @@ struct Snapshot {
   uint32_t uptime_s = 0;
 };
 
-enum Cmd : uint8_t { CMD_OPEN, CMD_CLOSE, CMD_STOP, CMD_AUTO, CMD_SETTINGS, CMD_CLEAR_FAULT };
+enum Cmd : uint8_t { CMD_OPEN, CMD_CLOSE, CMD_STOP, CMD_AUTO, CMD_SETTINGS, CMD_CLEAR_FAULT, CMD_CALIBRATE, CMD_RELEARN };
 struct Request {
   Cmd cmd;
   bool arg;
@@ -171,6 +173,8 @@ static void begin() {
   web->on("/api/close", HTTP_POST, [] { handleCmd(CMD_CLOSE); });
   web->on("/api/stop", HTTP_POST, [] { handleCmd(CMD_STOP); });
   web->on("/api/clear_fault", HTTP_POST, [] { handleCmd(CMD_CLEAR_FAULT); });
+  web->on("/api/calibrate", HTTP_POST, [] { handleCmd(CMD_CALIBRATE); });
+  web->on("/api/relearn", HTTP_POST, [] { handleCmd(CMD_RELEARN); });
   web->on("/api/settings", HTTP_POST, [] {
     String b = web->arg("plain");
     handleCmd(CMD_SETTINGS, false, &b);
