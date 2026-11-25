@@ -1,0 +1,87 @@
+{
+  "meta": {
+    "filename": "control.kicad_pro",
+    "version": 3
+  },
+  "board": {
+    "design_settings": {
+      "defaults": {
+        "board_outline_line_width": 0.05,
+        "copper_line_width": 0.2,
+        "silk_line_width": 0.12,
+        "silk_text_size_h": 0.8,
+        "silk_text_size_v": 0.8,
+        "silk_text_thickness": 0.12
+      },
+      "rules": {
+        "min_clearance": 0.1,
+        "min_track_width": 0.1,
+        "min_via_diameter": 0.45,
+        "min_through_hole_diameter": 0.3,
+        "min_hole_to_hole": 0.25,
+        "min_copper_edge_clearance": 0.3,
+        "min_silk_clearance": 0.0
+      },
+      "rule_severities": {
+        "courtyards_overlap": "warning"
+      }
+    }
+  },
+  "net_settings": {
+    "classes": [
+      {
+        "name": "Default",
+        "clearance": 0.12,
+        "track_width": 0.2,
+        "via_diameter": 0.6,
+        "via_drill": 0.3
+      },
+      {
+        "name": "Power",
+        "clearance": 0.12,
+        "track_width": 0.3,
+        "via_diameter": 0.6,
+        "via_drill": 0.3
+      },
+      {
+        "name": "Motor",
+        "clearance": 0.2,
+        "track_width": 0.8,
+        "via_diameter": 0.8,
+        "via_drill": 0.4
+      }
+    ],
+    "netclass_patterns": [
+      {
+        "netclass": "Power",
+        "pattern": "/+3V3"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "/GND"
+      },
+      {
+        "netclass": "Motor",
+        "pattern": "/VIN"
+      },
+      {
+        "netclass": "Motor",
+        "pattern": "/VM"
+      },
+      {
+        "netclass": "Motor",
+        "pattern": "/MOT_A"
+      },
+      {
+        "netclass": "Motor",
+        "pattern": "/MOT_B"
+      }
+    ]
+  },
+  "schematic": {
+    "legacy_lib_dir": "",
+    "legacy_lib_list": []
+  },
+  "sheets": [],
+  "text_variables": {}
+}

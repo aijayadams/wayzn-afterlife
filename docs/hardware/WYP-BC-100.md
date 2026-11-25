@@ -35,8 +35,8 @@ Pin details: [STM32-PINMAP.md](STM32-PINMAP.md).
 | U300 | ST **STM32F051K8T6**, LQFP32, Cortex-M0, 64 KB flash / 8 KB RAM | marking | The "motor controller" (`STM_V` in cloud state). Its firmware is updated over the air via the Imp (`STM_App_on_WSPD`) |
 | JP300 "STM" | Tag-Connect footprint (TC2030-style, 6 pads + locating holes) | verified | SWD (SWDIO, SWCLK), VDD and USART2 (the STM's debug console) for U300; pad map in [STM32-PINMAP.md](STM32-PINMAP.md) |
 | U1 | TI **DRV8828** (HTSSOP-28) | marking | **One** H-bridge with current regulation, intended for one stepper phase or a brushed DC motor. J6 has only two pins: the motor is a **brushed DC gear motor with a quadrature encoder** on J5, not a stepper |
-| J6 | Motor OUT_A / OUT_B | marking | 2-pin, large pitch (JST VH-style?) |
-| J7 | 12 V / GND input | marking | 2-pin, same family as J6 |
+| J6 | Motor: **OUT_A (pin nearer the button), OUT_B** | marking | 2-pin, side entry, **JST VH** (3.93–3.96 mm pitch measured on a 1200 dpi scan) |
+| J7 | Power: **GND (next to J6's OUT_B), 12V** | marking | 2-pin, same family as J6 |
 | J5 | GND / SIG B / SIG A / 3V3 | marking | Quadrature encoder from the motor's rear PCB. Matches the "counts" in `Position`, `OpenTo`, `DoorOffset` (≈767 counts/inch) |
 | J2 "IR SENSOR" | GND / SCL / DATA / 3V3 (pin 1 = GND) | marking | I2C to the thermal sensor board; see [ir-sensor-board.md](ir-sensor-board.md) |
 | STM+IMP | GND / RX / TX / 3V3, 0.1" through-hole, unpopulated; square pad = 3V3 | verified | The STM32 USART1 (PA9/PA10) ↔ imp link, 115200 8N1. RX/TX are named from the STM's side. The ESP32 brain connects here ([STM-PROTOCOL.md](../STM-PROTOCOL.md)) |
@@ -49,9 +49,9 @@ Pin details: [STM32-PINMAP.md](STM32-PINMAP.md).
 | U50 (+C50–C53) | small LGA/DFN near STM+IMP header | verified | Kionix KXTJ3 accelerometer, I2C 0x0F (cloud `X/Y/Z`); the imp uses it to sense the drive lever ([ir-sensor-board.md](ir-sensor-board.md)) |
 | U30 + L30 + D1005 | buck regulator, Schottky catch diode | inferred | 12 V → 3.3 V (or 5 V) |
 | U301 + L271 | second small regulator | inferred | Second rail. Measure it |
-| U8 | SOT-23-6, marking "BJ50" | inferred | Probably the motor current-sense amplifier (R2 → U8 → PA1) |
+| U8 | SOT-23-6, marking "BJ50" | inferred | Motor current-sense amplifier (R2 → U8 → PA1). The firmware scales the chain at **1.1 V/A** (read from the code: [STM-FIRMWARE.md](../STM-FIRMWARE.md), "Motor driver") |
 | D250 | MCC **SK84** 8 A 40 V Schottky | marking | Input reverse-polarity / OR-ing |
-| R2 | 2512 resistor "10C" | inferred | Motor current-sense shunt (the `H` status field) |
+| R2 | 2512 resistor "10C" | inferred | Motor current-sense shunt (the `H` status field, in mA). "10C" isn't a standard low-ohm code; R2 × U8's gain = 1.1 V/A |
 | T1, T2 | SOT-23-6 | inferred | MOSFETs or level shifting |
 | Button (by J6, under black tape, orange actuator, white cap) | Through-hole tactile switch | marking | The physical door button (`ButtonOperation`), read by the STM32 |
 | C3 | 100 µF electrolytic | marking | Bulk capacitance on the motor rail |
@@ -62,3 +62,5 @@ Pin details: [STM32-PINMAP.md](STM32-PINMAP.md).
 - J105 and TP3/5/7/8 destinations.
 - Motor nameplate, winding resistance, encoder lines per revolution.
 - Connector families and pitch for J5, J6, J7 and J2.
+
+Board geometry (outline, holes, every connector and the button, from 1200 dpi scans): [WYP-BC-100-MECHANICAL.md](WYP-BC-100-MECHANICAL.md).

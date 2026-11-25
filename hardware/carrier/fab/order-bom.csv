@@ -1,0 +1,29 @@
+Refs,Qty per board,Qty to order (5 boards),Value / description,Footprint,Manufacturer,MPN,LCSC,How,Notes
+U1,1,5,ESP32-C5-WROOM-1U-N8R8,ESP32-C5-WROOM-1U,Espressif,ESP32-C5-WROOM-1U-N8R8,C51950748,BUY,Mouser or DigiKey (LCSC showed 0). MSL 3: bake before reflow if the bag has been open > 1 week
+U2,1,5,ESP32-H2-MINI-1U-H4S,ESP32-H2-MINI-1U,Espressif,ESP32-H2-MINI-1U-H4S,C49450282,BUY,DigiKey or Mouser. MSL 3: bake before reflow if the bag has been open > 1 week
+"C1, C2",2,12,1u,C_0402_1005Metric,Samsung,CL05A105KA5NQNC,C52923,LCSC,round up to LCSC's minimum order quantity
+"C10, C5",2,12,10u,C_0603_1608Metric,Samsung,CL10A106KP8NNNC,C19702,LCSC,round up to LCSC's minimum order quantity
+"C3, C9",2,12,22u,C_0805_2012Metric,Samsung,CL21A226MAQNNNE,C45783,LCSC,round up to LCSC's minimum order quantity
+"C4, C6, C7, C8",4,22,100n,C_0402_1005Metric,Samsung,CL05B104KO5NNNC,C1525,LCSC,round up to LCSC's minimum order quantity
+D1,1,7,green,LED_0603_1608Metric,XINGLIGHT,XL-1608UGC-04,C965804,LCSC,LED: hotplated at home with the modules (not in the JLC placement); watch the polarity
+"R1, R2, R3, R4, R5",5,27,10k,R_0402_1005Metric,UNI-ROYAL,0402WGF1002TCE,C25744,LCSC,round up to LCSC's minimum order quantity
+R6,1,7,1k,R_0402_1005Metric,UNI-ROYAL,0402WGF1001TCE,C11702,LCSC,round up to LCSC's minimum order quantity
+"R7, R8, R9",3,17,100,R_0402_1005Metric,UNI-ROYAL,0402WGF1000TCE,C25076,LCSC,round up to LCSC's minimum order quantity
+"SW1, SW2",2,12,RESET,SW_Push_1P1T_XKB_TS-1187A,XKB Connection,TS-1187A-B-A-B,C318884,LCSC,round up to LCSC's minimum order quantity
+U3,1,7,LIS2DH12TR,LGA-12_2x2mm_P0.5mm,STMicroelectronics,LIS2DH12TR,C110926,LCSC,"2x2 mm LGA: stencil + paste, reflow. Stock is patchy: if LCSC is short, DigiKey/Mouser"
+"J2, J3",2,10,TO WAYZN J2,JST_PH_B4B-PH-K_1x04_P2.00mm_Vertical,JST,B4B-PH-K-S(LF)(SN),C131334,IRON,"JST PH 4-pin top entry: through-hole, plastic housing: iron after reflow, never on the hotplate"
+J4,1,5,STM NRST,JST_PH_B2B-PH-K_1x02_P2.00mm_Vertical,JST,B2B-PH-K-S(LF)(SN),C131337,IRON,"through-hole, plastic housing: iron after reflow, never on the hotplate"
+J6,1,5,J105 ANCHOR,PinHeader_2x04_P2.00mm_Vertical,HCTL,PZ200-2-04-Z,C2905990,IRON,"2x4 2.0 mm straight header, underside, into the Wayzn J105 (mechanical anchor): solder after the fit check. Alt LCSC C225289 (CJT A2005WV-2x4P, check it's straight)"
+(off-board),1,5,"PCB, 4 layers, bare (no assembly): see ORDER.md for the settings",,JLCPCB,carrier-gerbers.zip,,EXTRA: JLCPCB,minimum order is 5
+(off-board),,1,"SMT stencil for the top side (F.Paste), stainless 0.12 mm, electropolished, with the PCB order",,JLCPCB,from carrier-gerbers.zip (top paste only),,EXTRA: JLCPCB,one per order. Frameless is fine with a jig of spare boards
+(off-board),,1,"Solder paste, Sn63/Pb37 (or SAC305), Type 4 (fine: 0.5 mm-pitch LGA), syringe or small jar",,e.g. Chip Quik,SMD291AX10T4 (Sn63/Pb37 T4) or equivalent,,EXTRA: DigiKey / Mouser / Amazon,one per order; keep refrigerated
+(off-board),,1,No-clean tacky flux,,e.g. Chip Quik,SMD291 / any no-clean tacky flux,,EXTRA: DigiKey / Amazon,"one per order, for touch-up and the through-hole parts"
+(off-board),0.17,1,1x40 2.54 mm male breakaway header (square pins),,Sullins,PRPC040SAAN-RC,,EXTRA: DigiKey/Mouser/LCSC,cut a 1x6 for J5 per board; 1 strip covers 6 boards
+(off-board),1,5,"1x4 2.54 mm ROUND-pin (machined) male header, into the Wayzn STM+IMP holes",,Mill-Max,350-10-104-00-006000 (0.46 mm pins),,EXTRA: DigiKey (restock ~22 Dec) / LCSC C3331242,square pins don't fit those holes. Generic round-pin strip LCSC C9742 is cheaper but its pin size is unstated
+(off-board),1,5,"1x4 2.54 mm ROUND-hole (machined) socket, carrier J1 (underside)",,Mill-Max,310-43-104-41-001000 (or LCSC C7495238 CONNFLY DS1002-03-1x4131),,EXTRA: Future / LCSC,HEIGHT TBD: socket + round-pin header must equal the J105 + 2x4 header stack. Pick after measuring J105
+(off-board),1,5,"JST PH 4-pin cable, female both ends, straight (pin 1 to pin 1), ~100-150 mm",,Adafruit,3568 (150 mm) or Pololu 5623/5624 (100/160 mm),,EXTRA: DigiKey / Adafruit / Pololu,carrier J2 to the Wayzn J2 (IR SENSOR). Check pin 1 to pin 1 with a meter before plugging in
+(off-board),,1,"JST PH 4-pin extension for the Grid-EYE, only if its cable no longer reaches carrier J3",,TBD,depends on the Grid-EYE end's connector,,EXTRA: TBD,check the existing cable's reach first
+(off-board),1,5,"JST PH 2-pin cable, female one end, bare/tinned other end, ~100 mm",,generic,PH 2.0 mm 2P single-head,,EXTRA: AliExpress / Amazon,carrier J4 to the SW300 NRST pad (one wire; GND pin unused at the door end)
+(off-board),1,5,"Antenna, 2.4/5 GHz dual-band, U.FL (MHF I) plug, flex/PCB type, ~100 mm cable",,Molex,146187-0100,,EXTRA: DigiKey/Mouser,for the ESP32-C5. Any 2.4/5 GHz U.FL antenna works; keep gain modest
+(off-board),1,5,"Antenna, 2.4 GHz, W.FL / MHF III ('IPEX3') plug, gain <= 2.33 dBi",,generic,IPEX3 / MHF3 2.4 GHz FPC antenna,,EXTRA: AliExpress (or Adafruit 5445),for the ESP32-H2. Espressif certified the module with <= 2.33 dBi
+(off-board),,1,"3.3 V USB-serial adapter (CP2102 / CH340 / FTDI), with DTR+RTS",,generic,any 3.3 V logic,,EXTRA: Amazon / AliExpress,"programming tool: one per order, not per board"

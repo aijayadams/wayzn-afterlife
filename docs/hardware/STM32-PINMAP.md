@@ -23,10 +23,10 @@ JP300 labels as seen from the component side (2 columns × 3 rows):
 | 7 | PA1 (ADC1) | C308 | Filtered analog input: probably motor current (`H` effort?) | inferred |
 | 8 | PA2 (USART2_TX) | JP300-3 | USART2, the STM's debug console ([STM-FIRMWARE.md](../STM-FIRMWARE.md)) | verified |
 | 9 | PA3 (USART2_RX) | JP300-5 | (as above) | verified |
-| 10, 11 | PA4, PA5 | U1 DRV8828 | Motor driver control | verified |
+| 10, 11 | PA4, PA5 | U1 DRV8828 | PA4 = DECAY (tri-level), PA5 = nRESET (roles read from the firmware) | verified (continuity); roles read from code |
 | 12 | PA6 (TIM3_CH1) | J5 SIG B | Encoder: TIM3 encoder mode | verified |
 | 13 | PA7 (TIM3_CH2) | J5 SIG A | Encoder | verified |
-| 14, 15 | PB0, PB1 | U1 DRV8828 | Motor driver control | verified |
+| 14, 15 | PB0, PB1 | U1 DRV8828 | PB0 = nSLEEP, PB1 = nFAULT input (roles read from the firmware) | verified (continuity); roles read from code |
 | 16 | VSS | GND | | verified |
 | 18 | PA8 | NC | | verified |
 | 19 | PA9 (USART1_TX) | STM+IMP header TX, 0.2 Ω | The imp UART, USART1, no series resistor | verified |
@@ -34,7 +34,9 @@ JP300 labels as seen from the component side (2 columns × 3 rows):
 | 23 | PA13 SWDIO | JP300-1 | SWD | verified |
 | 24 | PA14 SWCLK | JP300-6 | SWD | verified |
 | 31 | BOOT0 | ~0 Ω to GND (reading unsteady); ~30 kΩ to 3V3 | Tied low: the STM32 always boots from flash; the imp **cannot** enter the ROM bootloader through BOOT0 | verified |
-| 17, 21, 22, 25–30, 32 | incl. PB6/PB7 (29/30) | not probed (TP1/TP2 checked: not on any STM32 pin) | | |
+| 22 | PA12 | not probed | DRV8828 PHASE (direction), from the firmware | read from code |
+| 26–30 | PB3–PB7 | not probed | DRV8828 I0–I4 current DAC, from the firmware | read from code |
+| 17, 21, 25, 32 | | not probed (TP1/TP2 checked: not on any STM32 pin) | One is probably the DRV8828 ENBL PWM (a timer channel), one the button | |
 
 JP300 carries SWD (1, 6), VDD (2) and USART2 (3, 5, the debug console); 4 is probably GND.
 

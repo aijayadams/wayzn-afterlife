@@ -1,0 +1,14 @@
+*-backups/
+*.lck
+~*
+fp-info-cache
+*.kicad_prl
+_autosave-*
+out/*.dsn
+out/*.ses
+out/*.log
+out/boxes.json
+fab/gerbers/
+out/gen_pcb.log
+out/plan.json
+.history/

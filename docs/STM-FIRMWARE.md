@@ -35,7 +35,34 @@ The shell reads **both** UARTs. Output of some commands goes only to USART2 (mar
   every 10 s.** Verified live: the STM drops to 10 s about 25 s after boot when nothing talks
   to it, and returns to 1.5 s as soon as a line arrives. A host that sends anything at
   least every 25 s keeps the 1.5 s rate.
-- At boot: current limit 1600, decay mode 0, state 0 → 4.
+- At boot: DRV8828 current limit 1030 mA, fast decay, state 0 → 4 (see "Motor driver" below).
+
+## Motor driver (read from the code, 2026-11-24)
+
+The motor init (0x080028E8) and the `limit`, `c`, `vsense`, `decay`, `go`, `reset_motor`, `sleep_motor` handlers
+(command table at 0x08007330) give the DRV8828 hookup and every scale factor:
+
+| STM pin | DRV8828 | How we know |
+|---|---|---|
+| PA12 | PHASE (direction) | written by the direction setter 0x08002728 (with a per-door invert flag) |
+| PA5 | nRESET | `reset_motor` / `mreset` write it; low then high at init |
+| PB0 | nSLEEP | `sleep_motor`; high (awake) at init |
+| PB1 | nFAULT (input, active low) | read by 0x08002A48, "fault = pin low" |
+| PA4 | DECAY | 0 = slow, 1 = fast, input (hi-Z) = mixed: the DRV8828's tri-level pin. Init: fast |
+| PB3–PB7 | I0–I4 (5-bit current DAC) | set by `limit` (0x080027FC) |
+| a timer channel (not identified) | ENBL (PWM) | `go` / the controller write a timer compare register, duty 0–100 |
+
+- **Current limit (hardware, DRV8828 chopping):** `limit <mA>`, capped at **3022 mA**. The firmware maps mA to the
+  DAC code through the DRV8828's 32-step table (0, 5, 10, … 98, 99, 100, 100 %) scaled so 100 % = 3022 mA. The
+  only call besides the shell is the init: **1030 mA** (DAC 34 %, code 7 ≈ 1027 mA). Nothing changes it per
+  move: the profile-based limit is a firmware threshold on the measured current, not the chopping limit.
+- **Motor current (`c`, and `H` in move summaries):** ADC counts × 3300 / 4096 = mV, then mV × 1000 / 1100 =
+  **mA**. So the sense chain (R2 → U8 → PA1) is **1.1 V per amp**. `c` replies (~451 while pushing) match the
+  `H` values in move summaries (0x1B8 = 440) in the same capture, so `H` and the profile values are mA: a normal
+  close ~400 mA, the firmware limit ~670 mA, the largest seen 747 mA.
+- **Supply voltage (`vsense`):** ADC mV × 7 = mV of the 12 V rail (R101/R102 divide by 7).
+- **Speed (`go`):** −100..100 % duty; the sign sets PHASE.
+
 
 ## Shell (0x080024C0)
 
