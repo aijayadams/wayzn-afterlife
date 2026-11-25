@@ -1,0 +1,5 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "Espressif")(type "KiCad")(uri "${KIPRJMOD}/lib/Espressif.kicad_sym")(options "")(descr "vendored from espressif/kicad-libraries"))
+  (lib (name "Carrier")(type "KiCad")(uri "${KIPRJMOD}/lib/Carrier.kicad_sym")(options "")(descr "project symbols (mk_carrier_sym.py)"))
+)

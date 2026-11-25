@@ -36,3 +36,19 @@ equally to any firmware or hardware built here.
   to this repo or any public fork or mirror.
 - Every finding goes in `docs/` with a confidence tag: **verified** (measured
   or read), **marking** (read off the part), **inferred** (educated guess).
+
+## Publishing hygiene (this repo is public)
+
+Everything committed here is public for good, so check every file before it goes in:
+
+- **No personal details:** no names beyond the GitHub handle, no email addresses, street addresses, Wi-Fi
+  names, IP addresses, hostnames or local paths (`/Users/...`). Commits use the GitHub noreply address.
+- **Photos and scans:** strip all metadata (GPS, camera, dates: re-save through an image library and check
+  that no EXIF is left). Blur the unit's serial/barcode label and the imp module's label before committing.
+  Don't commit phone originals (`*.HEIC`) or full-resolution scans; commit cleaned, downscaled copies.
+- **Generated files:** regenerate images and fab outputs from the cleaned sources in this repo, never copy
+  them from a private checkout (an overlay drawn on an unblurred photo leaks the label).
+- **Wayzn's firmware:** describing behaviour and scales is fine; the dump, the decompile and the code are
+  not (see above).
+- **Secrets:** only in gitignored files (`secrets.ini`); never in code, logs or docs.
+
