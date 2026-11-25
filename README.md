@@ -7,7 +7,7 @@ good machine: a strong motor, a careful motor controller and a thermal sensor th
 your dog. Only its "brain" was tied to the cloud. Swap that brain for a small ESP32
 board and the door keeps working, entirely on your own network.
 
-![Before: the app, Wayzn's cloud and the Electric Imp cloud stood between you and your door. After: an ESP32 on the door, controlled over your home network.](docs/before-after.svg)
+![Three stages. Original: the Wayzn app, Wayzn's cloud and the Electric Imp cloud drive the imp module, which drives Wayzn's STM32 motor controller and DRV8828 motor driver. Phase A, working today: your home automation talks over local Wi-Fi to an ESP32 brain that replaces the imp; Wayzn's STM32 and driver stay. Phase B, in design: one ESP32-C5 on our own board does the brain and the motor control, with a DRV8876 driver; the STM32 is gone. The door's motor, encoder, thermal sensor and case are kept throughout.](docs/before-after.svg)
 
 ## Two phases
 

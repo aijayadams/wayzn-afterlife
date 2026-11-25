@@ -1,126 +1,195 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600" width="1200" height="600" font-family="Helvetica, Arial, sans-serif">
-<title>Before and after: the Wayzn door without the cloud</title>
-<defs><linearGradient id="bgAfter" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ecfdf5"/><stop offset="1" stop-color="#eff6ff"/></linearGradient></defs>
-<rect x="0" y="0" width="1200" height="600" rx="0" fill="#ffffff" stroke="none" stroke-width="2" />
-<rect x="24" y="24" width="560" height="552" rx="14" fill="#f8fafc" stroke="#e2e8f0" stroke-width="2" />
-<text x="304" y="66" font-size="28" fill="#64748b" text-anchor="middle" font-weight="bold" >Before</text>
-<text x="304" y="92" font-size="15" fill="#64748b" text-anchor="middle" font-weight="normal" >Every open and close went through two clouds</text>
-<rect x="214" y="116" width="180" height="54" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="2" />
-<text x="304" y="150" font-size="17" fill="#334155" text-anchor="middle" font-weight="normal" >Wayzn app</text>
-<line x1="304" y1="172" x2="304.0" y2="184.0" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>
-<polygon points="304,196 296.8,184.0 311.2,184.0" fill="#94a3b8"/>
-<path d="M 151.5,263.5 a 27.5,27.5 0 0 1 5.0,-53.75 a 37.5,37.5 0 0 1 68.75,-15.0 a 30.0,30.0 0 0 1 51.25,25.0 a 23.75,23.75 0 0 1 0,43.75 z" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="2"/>
-<text x="214" y="240" font-size="15" fill="#475569" text-anchor="middle" font-weight="bold" >Wayzn cloud</text>
-<path d="M 331.5,263.5 a 27.5,27.5 0 0 1 5.0,-53.75 a 37.5,37.5 0 0 1 68.75,-15.0 a 30.0,30.0 0 0 1 51.25,25.0 a 23.75,23.75 0 0 1 0,43.75 z" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="2"/>
-<text x="394" y="240" font-size="15" fill="#475569" text-anchor="middle" font-weight="bold" >Electric Imp</text>
-<text x="394" y="258" font-size="13" fill="#64748b" text-anchor="middle" font-weight="normal" >cloud</text>
-<line x1="275" y1="236" x2="321.0" y2="236.0" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>
-<polygon points="333,236 321.0,243.2 321.0,228.8" fill="#94a3b8"/>
-<g transform="rotate(-8 304 214)">
-<rect x="200" y="280" width="208" height="34" rx="6" fill="#fef2f2" stroke="#ef4444" stroke-width="2.5" />
-<text x="304" y="303" font-size="15" fill="#dc2626" text-anchor="middle" font-weight="bold" >SHUT DOWN · MARCH 2027</text>
-</g>
-<line x1="394" y1="274" x2="394.0" y2="328.0" stroke="#94a3b8" stroke-width="3" stroke-dasharray="6 5" stroke-linecap="round"/>
-<polygon points="394,340 386.8,328.0 401.2,328.0" fill="#94a3b8"/>
-<text x="470" y="314" font-size="12" fill="#94a3b8" text-anchor="start" font-weight="normal" >the door's own</text>
-<text x="470" y="330" font-size="12" fill="#94a3b8" text-anchor="start" font-weight="normal" >Wi-Fi module</text>
-<rect x="319.0" y="342" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="319.0" y="412" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="355.0" y="342" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="355.0" y="412" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="391.0" y="342" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="391.0" y="412" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="427.0" y="342" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="427.0" y="412" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="463.0" y="342" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="463.0" y="412" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="304" y="350" width="180" height="64" rx="8" fill="#475569" stroke="none" stroke-width="2" />
-<text x="394.0" y="380.0" font-size="17" fill="#f8fafc" text-anchor="middle" font-weight="bold" >imp module</text>
-<text x="394.0" y="400.0" font-size="13" fill="#cbd5e1" text-anchor="middle" font-weight="normal" >talks only to its cloud</text>
-<line x1="394" y1="424" x2="394.0" y2="440.0" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>
-<polygon points="394,452 386.8,440.0 401.2,440.0" fill="#94a3b8"/>
-<rect x="319.0" y="452" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="319.0" y="522" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="355.0" y="452" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="355.0" y="522" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="391.0" y="452" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="391.0" y="522" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="427.0" y="452" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="427.0" y="522" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="463.0" y="452" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="463.0" y="522" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="304" y="460" width="180" height="64" rx="8" fill="#1e3a8a" stroke="none" stroke-width="2" />
-<text x="394.0" y="490.0" font-size="17" fill="#f8fafc" text-anchor="middle" font-weight="bold" >STM32</text>
-<text x="394.0" y="510.0" font-size="13" fill="#cbd5e1" text-anchor="middle" font-weight="normal" >motor controller</text>
-<text x="304" y="556" font-size="16" fill="#ef4444" text-anchor="middle" font-weight="bold" >No cloud, no door.</text>
-<rect x="616" y="24" width="560" height="552" rx="14" fill="url(#bgAfter)" stroke="#86efac" stroke-width="2.5" />
-<text x="896" y="66" font-size="28" fill="#047857" text-anchor="middle" font-weight="bold" >After</text>
-<text x="896" y="92" font-size="15" fill="#047857" text-anchor="middle" font-weight="normal" >Everything stays in your home</text>
-<rect x="640" y="108" width="512" height="420" rx="22" fill="none" stroke="#10b981" stroke-width="2" stroke-dasharray="8 6"/>
-<text x="1140" y="128" font-size="13" fill="#059669" text-anchor="end" font-weight="bold" >your home network</text>
-<rect x="706" y="140" width="210" height="62" rx="14" fill="#ffffff" stroke="#38bdf8" stroke-width="2.5" />
-<text x="811" y="168" font-size="16" fill="#0c4a6e" text-anchor="middle" font-weight="bold" >Your home automation</text>
-<text x="811" y="188" font-size="12" fill="#0369a1" text-anchor="middle" font-weight="normal" >e.g. Home Assistant · local API</text>
-<line x1="811" y1="204" x2="811" y2="246" stroke="#38bdf8" stroke-width="4"/>
-<polygon points="811,252 803,238 819,238" fill="#38bdf8"/><polygon points="811,198 803,212 819,212" fill="#38bdf8"/>
-<text x="822" y="232" font-size="12" fill="#0369a1" text-anchor="start" font-weight="normal" >local Wi-Fi</text>
-<rect x="986" y="262" width="150" height="74" rx="12" fill="#fff7ed" stroke="#fb923c" stroke-width="2" />
-<rect x="996" y="272" width="12" height="12" rx="2" fill="rgb(79,125,225)" stroke="none" stroke-width="2" />
-<rect x="1009" y="272" width="12" height="12" rx="2" fill="rgb(90,123,213)" stroke="none" stroke-width="2" />
-<rect x="1022" y="272" width="12" height="12" rx="2" fill="rgb(79,125,225)" stroke="none" stroke-width="2" />
-<rect x="1035" y="272" width="12" height="12" rx="2" fill="rgb(64,128,240)" stroke="none" stroke-width="2" />
-<rect x="996" y="285" width="12" height="12" rx="2" fill="rgb(137,113,165)" stroke="none" stroke-width="2" />
-<rect x="1009" y="285" width="12" height="12" rx="2" fill="rgb(183,104,119)" stroke="none" stroke-width="2" />
-<rect x="1022" y="285" width="12" height="12" rx="2" fill="rgb(137,113,165)" stroke="none" stroke-width="2" />
-<rect x="1035" y="285" width="12" height="12" rx="2" fill="rgb(79,125,225)" stroke="none" stroke-width="2" />
-<rect x="996" y="298" width="12" height="12" rx="2" fill="rgb(183,104,119)" stroke="none" stroke-width="2" />
-<rect x="1009" y="298" width="12" height="12" rx="2" fill="rgb(255,90,46)" stroke="none" stroke-width="2" />
-<rect x="1022" y="298" width="12" height="12" rx="2" fill="rgb(183,104,119)" stroke="none" stroke-width="2" />
-<rect x="1035" y="298" width="12" height="12" rx="2" fill="rgb(90,123,213)" stroke="none" stroke-width="2" />
-<rect x="996" y="311" width="12" height="12" rx="2" fill="rgb(137,113,165)" stroke="none" stroke-width="2" />
-<rect x="1009" y="311" width="12" height="12" rx="2" fill="rgb(183,104,119)" stroke="none" stroke-width="2" />
-<rect x="1022" y="311" width="12" height="12" rx="2" fill="rgb(137,113,165)" stroke="none" stroke-width="2" />
-<rect x="1035" y="311" width="12" height="12" rx="2" fill="rgb(79,125,225)" stroke="none" stroke-width="2" />
-<text x="1092" y="292" font-size="13" fill="#9a3412" text-anchor="middle" font-weight="bold" >Thermal</text>
-<text x="1092" y="308" font-size="13" fill="#9a3412" text-anchor="middle" font-weight="bold" >sensor</text>
-<text x="1092" y="324" font-size="12" fill="#c2410c" text-anchor="middle" font-weight="normal" >8×8</text>
-<line x1="984" y1="300" x2="928.0" y2="296.7" stroke="#fb923c" stroke-width="4" stroke-linecap="round"/>
-<polygon points="916,296 928.4,289.5 927.6,303.9" fill="#fb923c"/>
-<rect x="731.0" y="254" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="731.0" y="330" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="769.5" y="254" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="769.5" y="330" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="808.0" y="254" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="808.0" y="330" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="846.5" y="254" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="846.5" y="330" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="885.0" y="254" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="885.0" y="330" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="716" y="262" width="190" height="70" rx="8" fill="#0f766e" stroke="none" stroke-width="2" />
-<text x="811.0" y="295.0" font-size="17" fill="#f8fafc" text-anchor="middle" font-weight="bold" >ESP32 brain</text>
-<text x="811.0" y="315.0" font-size="13" fill="#cbd5e1" text-anchor="middle" font-weight="normal" >open source firmware</text>
-<line x1="811" y1="344" x2="811.0" y2="372.0" stroke="#10b981" stroke-width="4" stroke-linecap="round"/>
-<polygon points="811,384 803.8,372.0 818.2,372.0" fill="#10b981"/>
-<rect x="736.0" y="384" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="736.0" y="454" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="772.0" y="384" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="772.0" y="454" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="808.0" y="384" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="808.0" y="454" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="844.0" y="384" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="844.0" y="454" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="880.0" y="384" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="880.0" y="454" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
-<rect x="721" y="392" width="180" height="64" rx="8" fill="#1e3a8a" stroke="none" stroke-width="2" />
-<text x="811.0" y="422.0" font-size="17" fill="#f8fafc" text-anchor="middle" font-weight="bold" >STM32</text>
-<text x="811.0" y="442.0" font-size="13" fill="#cbd5e1" text-anchor="middle" font-weight="normal" >same motor controller</text>
-<text x="811" y="486" font-size="12" fill="#047857" text-anchor="middle" font-weight="normal" >Wayzn's motor &amp; safety firmware, untouched</text>
-<rect x="676" y="540" width="74.8" height="26" rx="13" fill="#dcfce7" stroke="none" stroke-width="2" />
-<text x="713.4" y="558" font-size="13" fill="#166534" text-anchor="middle" font-weight="bold" >No cloud</text>
-<rect x="758.8" y="540" width="112.8" height="26" rx="13" fill="#dbeafe" stroke="none" stroke-width="2" />
-<text x="815.1999999999999" y="558" font-size="13" fill="#1e40af" text-anchor="middle" font-weight="bold" >Local control</text>
-<rect x="879.5999999999999" y="540" width="97.6" height="26" rx="13" fill="#fef3c7" stroke="none" stroke-width="2" />
-<text x="928.3999999999999" y="558" font-size="13" fill="#92400e" text-anchor="middle" font-weight="bold" >Open source</text>
-<rect x="985.1999999999999" y="540" width="173.6" height="26" rx="13" fill="#ffedd5" stroke="none" stroke-width="2" />
-<text x="1072.0" y="558" font-size="13" fill="#9a3412" text-anchor="middle" font-weight="bold" >Smarter dog detection</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1320 720" width="1320" height="720" font-family="Helvetica, Arial, sans-serif">
+<title>Original, Phase A and Phase B: Wayzn's cloud and hardware removed step by step</title>
+<rect x="0" y="0" width="1320" height="720" rx="0" fill="#ffffff" stroke="none" stroke-width="2" />
+<rect x="24" y="20" width="412" height="680" rx="14" fill="#f8fafc" stroke="#e2e8f0" stroke-width="2.5" />
+<text x="230.0" y="58" font-size="26" fill="#64748b" text-anchor="middle" font-weight="bold" >Original</text>
+<text x="230.0" y="82" font-size="14" fill="#64748b" text-anchor="middle" font-weight="normal" >Wayzn's design</text>
+<rect x="90.0" y="118" width="280" height="50" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="2" />
+<text x="230.0" y="142.0" font-size="15" fill="#334155" text-anchor="middle" font-weight="bold" >Wayzn app</text>
+<text x="230.0" y="159.0" font-size="12" fill="#64748b" text-anchor="middle" font-weight="normal" >on your phone</text>
+<line x1="230.0" y1="170" x2="230.0" y2="180.0" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>
+<polygon points="230.0,192 222.8,180.0 237.2,180.0" fill="#94a3b8"/>
+<path d="M 110.83333333333334,261.6333333333333 a 21.633333333333333,21.633333333333333 0 0 1 3.933333333333333,-42.28333333333333 a 29.5,29.5 0 0 1 54.08333333333333,-11.799999999999999 a 23.599999999999998,23.599999999999998 0 0 1 40.31666666666666,19.666666666666664 a 18.683333333333334,18.683333333333334 0 0 1 0,34.416666666666664 z" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="2"/>
+<text x="160.0" y="244" font-size="13" fill="#475569" text-anchor="middle" font-weight="bold" >Wayzn cloud</text>
+<path d="M 250.83333333333334,261.6333333333333 a 21.633333333333333,21.633333333333333 0 0 1 3.933333333333333,-42.28333333333333 a 29.5,29.5 0 0 1 54.08333333333333,-11.799999999999999 a 23.599999999999998,23.599999999999998 0 0 1 40.31666666666666,19.666666666666664 a 18.683333333333334,18.683333333333334 0 0 1 0,34.416666666666664 z" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="2"/>
+<text x="300.0" y="242" font-size="13" fill="#475569" text-anchor="middle" font-weight="bold" >Electric Imp</text>
+<text x="300.0" y="257" font-size="12" fill="#64748b" text-anchor="middle" font-weight="normal" >cloud</text>
+<line x1="210.0" y1="240" x2="240.0" y2="240.0" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>
+<polygon points="252.0,240 240.0,247.2 240.0,232.8" fill="#94a3b8"/>
+<line x1="230.0" y1="276" x2="230.0" y2="278.0" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>
+<polygon points="230.0,290 222.8,278.0 237.2,278.0" fill="#94a3b8"/>
+<rect x="150.0" y="292" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="150.0" y="358" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="188.5" y="292" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="188.5" y="358" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="227.0" y="292" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="227.0" y="358" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="265.5" y="292" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="265.5" y="358" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="304.0" y="292" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="304.0" y="358" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="135.0" y="300" width="190" height="60" rx="8" fill="#475569" stroke="none" stroke-width="2" />
+<text x="230.0" y="328.0" font-size="17" fill="#f8fafc" text-anchor="middle" font-weight="bold" >imp module</text>
+<text x="230.0" y="348.0" font-size="13" fill="#cbd5e1" text-anchor="middle" font-weight="normal" >Wayzn's cloud brain</text>
+<line x1="230.0" y1="370" x2="230.0" y2="370.0" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>
+<polygon points="230.0,382 222.8,370.0 237.2,370.0" fill="#94a3b8"/>
+<rect x="150.0" y="384" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="150.0" y="450" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="188.5" y="384" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="188.5" y="450" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="227.0" y="384" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="227.0" y="450" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="265.5" y="384" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="265.5" y="450" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="304.0" y="384" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="304.0" y="450" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="135.0" y="392" width="190" height="60" rx="8" fill="#1e3a8a" stroke="none" stroke-width="2" />
+<text x="230.0" y="420.0" font-size="17" fill="#f8fafc" text-anchor="middle" font-weight="bold" >STM32</text>
+<text x="230.0" y="440.0" font-size="13" fill="#cbd5e1" text-anchor="middle" font-weight="normal" >Wayzn's motor controller</text>
+<line x1="230.0" y1="462" x2="230.0" y2="462.0" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>
+<polygon points="230.0,474 222.8,462.0 237.2,462.0" fill="#94a3b8"/>
+<rect x="150.0" y="476" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="150.0" y="542" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="188.5" y="476" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="188.5" y="542" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="227.0" y="476" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="227.0" y="542" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="265.5" y="476" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="265.5" y="542" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="304.0" y="476" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="304.0" y="542" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="135.0" y="484" width="190" height="60" rx="8" fill="#334155" stroke="none" stroke-width="2" />
+<text x="230.0" y="512.0" font-size="17" fill="#f8fafc" text-anchor="middle" font-weight="bold" >DRV8828</text>
+<text x="230.0" y="532.0" font-size="13" fill="#cbd5e1" text-anchor="middle" font-weight="normal" >Wayzn's motor driver</text>
+<rect x="38" y="284" width="22" height="276" rx="6" fill="none" stroke="#94a3b8" stroke-width="2" stroke-dasharray="4 4"/>
+<text x="54" y="422.0" font-size="12" fill="#64748b" text-anchor="middle" transform="rotate(-90 54 422.0)">Wayzn's control board</text>
+<line x1="230.0" y1="554" x2="230.0" y2="556.0" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>
+<polygon points="230.0,568 222.8,556.0 237.2,556.0" fill="#94a3b8"/>
+<rect x="60.0" y="576" width="340" height="56" rx="12" fill="#fff7ed" stroke="#fb923c" stroke-width="2" />
+<text x="230.0" y="603.0" font-size="15" fill="#9a3412" text-anchor="middle" font-weight="bold" >The door itself, kept</text>
+<text x="230.0" y="620.0" font-size="12" fill="#c2410c" text-anchor="middle" font-weight="normal" >motor · encoder · 8×8 thermal sensor · case</text>
+<rect x="80.0" y="646" width="300" height="32" rx="16" fill="#ffffff" stroke="#dc2626" stroke-width="2" />
+<text x="230.0" y="668" font-size="15" fill="#dc2626" text-anchor="middle" font-weight="bold" >Cloud shuts down March 2027</text>
+<polygon points="439,348.0 451,360.0 439,372.0" fill="#64748b"/>
+<rect x="454" y="20" width="412" height="680" rx="14" fill="#f0fdf4" stroke="#86efac" stroke-width="2.5" />
+<text x="660.0" y="58" font-size="26" fill="#047857" text-anchor="middle" font-weight="bold" >Phase A</text>
+<text x="660.0" y="82" font-size="14" fill="#047857" text-anchor="middle" font-weight="normal" >ESP32 dev board on Wayzn's board</text>
+<rect x="520.0" y="118" width="280" height="50" rx="12" fill="#ffffff" stroke="#38bdf8" stroke-width="2" />
+<text x="660.0" y="142.0" font-size="15" fill="#0c4a6e" text-anchor="middle" font-weight="bold" >Your home automation</text>
+<text x="660.0" y="159.0" font-size="12" fill="#0369a1" text-anchor="middle" font-weight="normal" >e.g. Home Assistant · local API</text>
+<line x1="660.0" y1="170" x2="660.0" y2="180.0" stroke="#38bdf8" stroke-width="3" stroke-dasharray="2 6" stroke-linecap="round"/>
+<polygon points="660.0,192 652.8,180.0 667.2,180.0" fill="#38bdf8"/>
+<rect x="520.0" y="206" width="280" height="62" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="6 5"/>
+<text x="660.0" y="236.0" font-size="14" fill="#94a3b8" text-anchor="middle" font-weight="bold" text-decoration="line-through">Wayzn + Electric Imp clouds</text>
+<text x="660.0" y="253.0" font-size="12" fill="#94a3b8" text-anchor="middle" font-weight="normal" >gone: local Wi-Fi only</text>
+<line x1="660.0" y1="276" x2="660.0" y2="278.0" stroke="#10b981" stroke-width="3" stroke-linecap="round"/>
+<polygon points="660.0,290 652.8,278.0 667.2,278.0" fill="#10b981"/>
+<rect x="580.0" y="292" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="580.0" y="358" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="618.5" y="292" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="618.5" y="358" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="657.0" y="292" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="657.0" y="358" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="695.5" y="292" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="695.5" y="358" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="734.0" y="292" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="734.0" y="358" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="565.0" y="300" width="190" height="60" rx="8" fill="#0f766e" stroke="none" stroke-width="2" />
+<text x="660.0" y="328.0" font-size="17" fill="#f8fafc" text-anchor="middle" font-weight="bold" >ESP32 brain</text>
+<text x="660.0" y="348.0" font-size="13" fill="#cbd5e1" text-anchor="middle" font-weight="normal" >replaces the imp</text>
+<line x1="660.0" y1="370" x2="660.0" y2="370.0" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>
+<polygon points="660.0,382 652.8,370.0 667.2,370.0" fill="#94a3b8"/>
+<rect x="580.0" y="384" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="580.0" y="450" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="618.5" y="384" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="618.5" y="450" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="657.0" y="384" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="657.0" y="450" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="695.5" y="384" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="695.5" y="450" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="734.0" y="384" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="734.0" y="450" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="565.0" y="392" width="190" height="60" rx="8" fill="#1e3a8a" stroke="none" stroke-width="2" />
+<text x="660.0" y="420.0" font-size="17" fill="#f8fafc" text-anchor="middle" font-weight="bold" >STM32</text>
+<text x="660.0" y="440.0" font-size="13" fill="#cbd5e1" text-anchor="middle" font-weight="normal" >Wayzn's, untouched</text>
+<line x1="660.0" y1="462" x2="660.0" y2="462.0" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>
+<polygon points="660.0,474 652.8,462.0 667.2,462.0" fill="#94a3b8"/>
+<rect x="580.0" y="476" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="580.0" y="542" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="618.5" y="476" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="618.5" y="542" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="657.0" y="476" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="657.0" y="542" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="695.5" y="476" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="695.5" y="542" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="734.0" y="476" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="734.0" y="542" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="565.0" y="484" width="190" height="60" rx="8" fill="#334155" stroke="none" stroke-width="2" />
+<text x="660.0" y="512.0" font-size="17" fill="#f8fafc" text-anchor="middle" font-weight="bold" >DRV8828</text>
+<text x="660.0" y="532.0" font-size="13" fill="#cbd5e1" text-anchor="middle" font-weight="normal" >Wayzn's motor driver</text>
+<rect x="468" y="284" width="22" height="276" rx="6" fill="none" stroke="#94a3b8" stroke-width="2" stroke-dasharray="4 4"/>
+<text x="484" y="422.0" font-size="12" fill="#64748b" text-anchor="middle" transform="rotate(-90 484 422.0)">Wayzn's control board</text>
+<line x1="660.0" y1="554" x2="660.0" y2="556.0" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>
+<polygon points="660.0,568 652.8,556.0 667.2,556.0" fill="#94a3b8"/>
+<rect x="490.0" y="576" width="340" height="56" rx="12" fill="#fff7ed" stroke="#fb923c" stroke-width="2" />
+<text x="660.0" y="603.0" font-size="15" fill="#9a3412" text-anchor="middle" font-weight="bold" >The door itself, kept</text>
+<text x="660.0" y="620.0" font-size="12" fill="#c2410c" text-anchor="middle" font-weight="normal" >motor · encoder · 8×8 thermal sensor · case</text>
+<rect x="510.0" y="646" width="300" height="32" rx="16" fill="#ffffff" stroke="#047857" stroke-width="2" />
+<text x="660.0" y="668" font-size="15" fill="#047857" text-anchor="middle" font-weight="bold" >Works today</text>
+<polygon points="869,348.0 881,360.0 869,372.0" fill="#64748b"/>
+<rect x="884" y="20" width="412" height="680" rx="14" fill="#fffbeb" stroke="#fcd34d" stroke-width="2.5" />
+<text x="1090.0" y="58" font-size="26" fill="#92400e" text-anchor="middle" font-weight="bold" >Phase B</text>
+<text x="1090.0" y="82" font-size="14" fill="#92400e" text-anchor="middle" font-weight="normal" >Our own control board</text>
+<rect x="950.0" y="118" width="280" height="50" rx="12" fill="#ffffff" stroke="#38bdf8" stroke-width="2" />
+<text x="1090.0" y="142.0" font-size="15" fill="#0c4a6e" text-anchor="middle" font-weight="bold" >Your home automation</text>
+<text x="1090.0" y="159.0" font-size="12" fill="#0369a1" text-anchor="middle" font-weight="normal" >e.g. Home Assistant · local API</text>
+<line x1="1090.0" y1="170" x2="1090.0" y2="180.0" stroke="#38bdf8" stroke-width="3" stroke-dasharray="2 6" stroke-linecap="round"/>
+<polygon points="1090.0,192 1082.8,180.0 1097.2,180.0" fill="#38bdf8"/>
+<rect x="950.0" y="206" width="280" height="62" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="6 5"/>
+<text x="1090.0" y="236.0" font-size="14" fill="#94a3b8" text-anchor="middle" font-weight="bold" text-decoration="line-through">Wayzn + Electric Imp clouds</text>
+<text x="1090.0" y="253.0" font-size="12" fill="#94a3b8" text-anchor="middle" font-weight="normal" >gone: local Wi-Fi only</text>
+<line x1="1090.0" y1="276" x2="1090.0" y2="278.0" stroke="#10b981" stroke-width="3" stroke-linecap="round"/>
+<polygon points="1090.0,290 1082.8,278.0 1097.2,278.0" fill="#10b981"/>
+<rect x="1010.0" y="292" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="1010.0" y="358" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="1048.5" y="292" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="1048.5" y="358" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="1087.0" y="292" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="1087.0" y="358" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="1125.5" y="292" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="1125.5" y="358" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="1164.0" y="292" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="1164.0" y="358" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="995.0" y="300" width="190" height="60" rx="8" fill="#0f766e" stroke="none" stroke-width="2" />
+<text x="1090.0" y="328.0" font-size="17" fill="#f8fafc" text-anchor="middle" font-weight="bold" >ESP32-C5</text>
+<text x="1090.0" y="348.0" font-size="13" fill="#cbd5e1" text-anchor="middle" font-weight="normal" >brain + motor control</text>
+<line x1="1090.0" y1="370" x2="1090.0" y2="370.0" stroke="#10b981" stroke-width="3" stroke-linecap="round"/>
+<polygon points="1090.0,382 1082.8,370.0 1097.2,370.0" fill="#10b981"/>
+<rect x="965.0" y="390" width="250" height="62" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="6 5"/>
+<text x="1090.0" y="420.0" font-size="14" fill="#94a3b8" text-anchor="middle" font-weight="bold" text-decoration="line-through">STM32 motor controller</text>
+<text x="1090.0" y="437.0" font-size="12" fill="#94a3b8" text-anchor="middle" font-weight="normal" >gone: the C5 drives the motor</text>
+<line x1="1090.0" y1="462" x2="1090.0" y2="462.0" stroke="#10b981" stroke-width="3" stroke-linecap="round"/>
+<polygon points="1090.0,474 1082.8,462.0 1097.2,462.0" fill="#10b981"/>
+<rect x="1010.0" y="476" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="1010.0" y="542" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="1048.5" y="476" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="1048.5" y="542" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="1087.0" y="476" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="1087.0" y="542" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="1125.5" y="476" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="1125.5" y="542" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="1164.0" y="476" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="1164.0" y="542" width="6" height="10" rx="1" fill="#94a3b8" stroke="none" stroke-width="2" />
+<rect x="995.0" y="484" width="190" height="60" rx="8" fill="#0f766e" stroke="none" stroke-width="2" />
+<text x="1090.0" y="512.0" font-size="17" fill="#f8fafc" text-anchor="middle" font-weight="bold" >DRV8876</text>
+<text x="1090.0" y="532.0" font-size="13" fill="#cbd5e1" text-anchor="middle" font-weight="normal" >replaces the DRV8828</text>
+<rect x="898" y="284" width="22" height="276" rx="6" fill="none" stroke="#10b981" stroke-width="2" stroke-dasharray="4 4"/>
+<text x="914" y="422.0" font-size="12" fill="#047857" text-anchor="middle" transform="rotate(-90 914 422.0)">our board, same size</text>
+<line x1="1090.0" y1="554" x2="1090.0" y2="556.0" stroke="#10b981" stroke-width="3" stroke-linecap="round"/>
+<polygon points="1090.0,568 1082.8,556.0 1097.2,556.0" fill="#10b981"/>
+<rect x="920.0" y="576" width="340" height="56" rx="12" fill="#fff7ed" stroke="#fb923c" stroke-width="2" />
+<text x="1090.0" y="603.0" font-size="15" fill="#9a3412" text-anchor="middle" font-weight="bold" >The door itself, kept</text>
+<text x="1090.0" y="620.0" font-size="12" fill="#c2410c" text-anchor="middle" font-weight="normal" >motor · encoder · 8×8 thermal sensor · case</text>
+<rect x="940.0" y="646" width="300" height="32" rx="16" fill="#ffffff" stroke="#b45309" stroke-width="2" />
+<text x="1090.0" y="668" font-size="15" fill="#b45309" text-anchor="middle" font-weight="bold" >In design and validation</text>
 </svg>

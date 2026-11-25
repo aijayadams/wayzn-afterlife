@@ -1,4 +1,4 @@
-"""Generate docs/before-after.svg and docs/presence.svg (README overview diagrams).
+"""Generate docs/before-after.svg (original -> Phase A -> Phase B) and docs/presence.svg (README diagrams).
 
 Usage: python3 tools/diagrams/gen_overview.py docs/
 """
@@ -75,73 +75,106 @@ def badge(svg, x, y, s, fill, col, w=None):
     return w
 
 
-# --------------------------------------------------------------------------------------- before / after
-v = Svg(1200, 600, "Before and after: the Wayzn door without the cloud")
-v.add('<defs><linearGradient id="bgAfter" x1="0" y1="0" x2="0" y2="1">'
-      '<stop offset="0" stop-color="#ecfdf5"/><stop offset="1" stop-color="#eff6ff"/></linearGradient></defs>')
-v.rect(0, 0, 1200, 600, "#ffffff", rx=0)
+# --------------------------------------------------------------------------------------- original -> A -> B
+# Three columns with the same layers, so you can watch Wayzn's parts go: Phase A drops the app, both clouds and the
+# imp; Phase B also drops the STM32 and its motor driver (the whole Wayzn board).
+W, H = 1320, 720
+v = Svg(W, H, "Original, Phase A and Phase B: Wayzn's cloud and hardware removed step by step")
+v.rect(0, 0, W, H, "#ffffff", rx=0)
+WAYZN, OURS, GONE = "#475569", "#0f766e", "#cbd5e1"
 
-# BEFORE card
-v.rect(24, 24, 560, 552, "#f8fafc", "#e2e8f0")
-v.text(304, 66, "Before", 28, "#64748b", weight="bold")
-v.text(304, 92, "Every open and close went through two clouds", 15, "#64748b")
-# chain
-v.rect(214, 116, 180, 54, "#ffffff", "#cbd5e1", rx=12)
-v.text(304, 150, "Wayzn app", 17, "#334155")
-arrow(v, 304, 172, 304, 196, "#94a3b8", 3)
-cloud(v, 214, 236, 150, "#f1f5f9", "#cbd5e1")
-v.text(214, 240, "Wayzn cloud", 15, "#475569", weight="bold")
-cloud(v, 394, 236, 150, "#f1f5f9", "#cbd5e1")
-v.text(394, 240, "Electric Imp", 15, "#475569", weight="bold")
-v.text(394, 258, "cloud", 13, "#64748b")
-arrow(v, 275, 236, 333, 236, "#94a3b8", 3)
-# shutdown stamp
-v.add('<g transform="rotate(-8 304 214)">')
-v.rect(200, 280, 208, 34, "#fef2f2", "#ef4444", rx=6, sw=2.5)
-v.text(304, 303, "SHUT DOWN · MARCH 2027", 15, "#dc2626", weight="bold")
-v.add("</g>")
-arrow(v, 394, 274, 394, 340, "#94a3b8", 3, dash="6 5")
-v.text(470, 314, "the door's own", 12, "#94a3b8", "start")
-v.text(470, 330, "Wi-Fi module", 12, "#94a3b8", "start")
-chip(v, 304, 350, 180, 64, "#475569", "imp module", "talks only to its cloud")
-arrow(v, 394, 424, 394, 452, "#94a3b8", 3)
-chip(v, 304, 460, 180, 64, "#1e3a8a", "STM32", "motor controller")
-v.text(304, 556, "No cloud, no door.", 16, "#ef4444", weight="bold")
 
-# AFTER card
-v.rect(616, 24, 560, 552, "url(#bgAfter)", "#86efac", sw=2.5)
-v.text(896, 66, "After", 28, "#047857", weight="bold")
-v.text(896, 92, "Everything stays in your home", 15, "#047857")
-# house boundary
-v.rect(640, 108, 512, 420, "none", "#10b981", rx=22, sw=2, extra='stroke-dasharray="8 6"')
-v.text(1140, 128, "your home network", 13, "#059669", "end", "bold")
-# HA
-v.rect(706, 140, 210, 62, "#ffffff", "#38bdf8", rx=14, sw=2.5)
-v.text(811, 168, "Your home automation", 16, "#0c4a6e", weight="bold")
-v.text(811, 188, "e.g. Home Assistant · local API", 12, "#0369a1")
-v.add('<line x1="811" y1="204" x2="811" y2="246" stroke="#38bdf8" stroke-width="4"/>')
-v.add('<polygon points="811,252 803,238 819,238" fill="#38bdf8"/><polygon points="811,198 803,212 819,212" fill="#38bdf8"/>')
-v.text(822, 232, "local Wi-Fi", 12, "#0369a1", "start")
-# thermal sensor
-v.rect(986, 262, 150, 74, "#fff7ed", "#fb923c", rx=12, sw=2)
-for r in range(4):
-    for c in range(4):
-        heat = math.exp(-((r - 2) ** 2 + (c - 1) ** 2) / 2.2)
-        col = f"rgb({int(59 + 196 * heat)},{int(130 + 20 * heat - 60 * heat)},{int(246 - 200 * heat)})"
-        v.rect(996 + c * 13, 272 + r * 13, 12, 12, col, rx=2)
-v.text(1092, 292, "Thermal", 13, "#9a3412", weight="bold")
-v.text(1092, 308, "sensor", 13, "#9a3412", weight="bold")
-v.text(1092, 324, "8×8", 12, "#c2410c")
-arrow(v, 984, 300, 916, 296, "#fb923c", 4)
-chip(v, 716, 262, 190, 70, "#0f766e", "ESP32 brain", "open source firmware")
-arrow(v, 811, 344, 811, 384, "#10b981", 4)
-chip(v, 721, 392, 180, 64, "#1e3a8a", "STM32", "same motor controller")
-v.text(811, 486, "Wayzn's motor & safety firmware, untouched", 12, "#047857")
-# badges
-bx = 676
-for s, f, c in [("No cloud", "#dcfce7", "#166534"), ("Local control", "#dbeafe", "#1e40af"),
-                ("Open source", "#fef3c7", "#92400e"), ("Smarter dog detection", "#ffedd5", "#9a3412")]:
-    bx += badge(v, bx, 540, s, f, c) + 8
+def ghost(svg, cx, y, w, h, label, why):
+    svg.rect(cx - w / 2, y, w, h, "#f8fafc", "#cbd5e1", rx=10, sw=2, extra='stroke-dasharray="6 5"')
+    svg.text(cx, y + h / 2 - 1, label, 14, "#94a3b8", weight="bold", extra='text-decoration="line-through"')
+    svg.text(cx, y + h / 2 + 16, why, 12, "#94a3b8")
+
+
+def box(svg, cx, y, w, h, fill, stroke, label, sub, col, subcol):
+    svg.rect(cx - w / 2, y, w, h, fill, stroke, rx=12, sw=2)
+    svg.text(cx, y + h / 2 - 1, label, 15, col, weight="bold")
+    svg.text(cx, y + h / 2 + 16, sub, 12, subcol)
+
+
+cols = [
+    dict(title="Original", sub="Wayzn's design", status="Cloud shuts down March 2027", scol="#dc2626",
+         bg="#f8fafc", border="#e2e8f0", tcol="#64748b"),
+    dict(title="Phase A", sub="ESP32 dev board on Wayzn's board", status="Works today", scol="#047857",
+         bg="#f0fdf4", border="#86efac", tcol="#047857"),
+    dict(title="Phase B", sub="Our own control board", status="In design and validation", scol="#b45309",
+         bg="#fffbeb", border="#fcd34d", tcol="#92400e"),
+]
+CW, GAP = 412, 18
+ROW = dict(ctl=118, cloud=196, brain=300, mcu=392, drv=484, door=576)
+for k, c in enumerate(cols):
+    x = 24 + k * (CW + GAP)
+    cx = x + CW / 2
+    v.rect(x, 20, CW, H - 40, c["bg"], c["border"], sw=2.5)
+    v.text(cx, 58, c["title"], 26, c["tcol"], weight="bold")
+    v.text(cx, 82, c["sub"], 14, c["tcol"])
+    bw = 280
+    # 1: who controls the door
+    if k == 0:
+        box(v, cx, ROW["ctl"], bw, 50, "#ffffff", "#cbd5e1", "Wayzn app", "on your phone", "#334155", "#64748b")
+    else:
+        box(v, cx, ROW["ctl"], bw, 50, "#ffffff", "#38bdf8", "Your home automation",
+            "e.g. Home Assistant · local API", "#0c4a6e", "#0369a1")
+    arrow(v, cx, ROW["ctl"] + 52, cx, ROW["cloud"] - 4, "#94a3b8" if k == 0 else "#38bdf8", 3,
+          dash=None if k == 0 else "2 6")
+    # 2: the clouds
+    if k == 0:
+        cloud(v, cx - 70, ROW["cloud"] + 44, 118, "#f1f5f9", "#cbd5e1")
+        v.text(cx - 70, ROW["cloud"] + 48, "Wayzn cloud", 13, "#475569", weight="bold")
+        cloud(v, cx + 70, ROW["cloud"] + 44, 118, "#f1f5f9", "#cbd5e1")
+        v.text(cx + 70, ROW["cloud"] + 46, "Electric Imp", 13, "#475569", weight="bold")
+        v.text(cx + 70, ROW["cloud"] + 61, "cloud", 12, "#64748b")
+        arrow(v, cx - 20, ROW["cloud"] + 44, cx + 22, ROW["cloud"] + 44, "#94a3b8", 3)
+    else:
+        ghost(v, cx, ROW["cloud"] + 10, bw, 62, "Wayzn + Electric Imp clouds", "gone: local Wi-Fi only")
+    arrow(v, cx, ROW["cloud"] + 80, cx, ROW["brain"] - 10, "#94a3b8" if k == 0 else "#10b981", 3)
+    # 3: the brain
+    if k == 0:
+        chip(v, cx - 95, ROW["brain"], 190, 60, WAYZN, "imp module", "Wayzn's cloud brain")
+    elif k == 1:
+        chip(v, cx - 95, ROW["brain"], 190, 60, OURS, "ESP32 brain", "replaces the imp")
+    else:
+        chip(v, cx - 95, ROW["brain"], 190, 60, OURS, "ESP32-C5", "brain + motor control")
+    # 4: motor controller
+    arrow(v, cx, ROW["brain"] + 70, cx, ROW["mcu"] - 10, "#94a3b8" if k < 2 else "#10b981", 3)
+    if k < 2:
+        chip(v, cx - 95, ROW["mcu"], 190, 60, "#1e3a8a", "STM32",
+             "Wayzn's motor controller" if k == 0 else "Wayzn's, untouched")
+    else:
+        ghost(v, cx, ROW["mcu"] - 2, 250, 62, "STM32 motor controller", "gone: the C5 drives the motor")
+    # 5: motor driver
+    arrow(v, cx, ROW["mcu"] + 70, cx, ROW["drv"] - 10, "#94a3b8" if k < 2 else "#10b981", 3)
+    if k < 2:
+        chip(v, cx - 95, ROW["drv"], 190, 60, "#334155", "DRV8828", "Wayzn's motor driver")
+    else:
+        chip(v, cx - 95, ROW["drv"], 190, 60, OURS, "DRV8876", "replaces the DRV8828")
+    # Wayzn's board vs ours: a bracket label
+    if k < 2:
+        v.rect(x + 14, ROW["brain"] - 16, 22, ROW["drv"] + 76 - ROW["brain"] + 16, "none", "#94a3b8", rx=6, sw=2,
+               extra='stroke-dasharray="4 4"')
+        v.add(f'<text x="{x + 30}" y="{(ROW["brain"] + ROW["drv"] + 60) / 2}" font-size="12" fill="#64748b" '
+              f'text-anchor="middle" transform="rotate(-90 {x + 30} {(ROW["brain"] + ROW["drv"] + 60) / 2})">'
+              "Wayzn's control board</text>")
+    else:
+        v.rect(x + 14, ROW["brain"] - 16, 22, ROW["drv"] + 76 - ROW["brain"] + 16, "none", "#10b981", rx=6, sw=2,
+               extra='stroke-dasharray="4 4"')
+        v.add(f'<text x="{x + 30}" y="{(ROW["brain"] + ROW["drv"] + 60) / 2}" font-size="12" fill="#047857" '
+              f'text-anchor="middle" transform="rotate(-90 {x + 30} {(ROW["brain"] + ROW["drv"] + 60) / 2})">'
+              "our board, same size</text>")
+    # 6: the door itself (always kept)
+    arrow(v, cx, ROW["drv"] + 70, cx, ROW["door"] - 8, "#94a3b8" if k < 2 else "#10b981", 3)
+    box(v, cx, ROW["door"], 340, 56, "#fff7ed", "#fb923c", "The door itself, kept",
+        "motor · encoder · 8×8 thermal sensor · case", "#9a3412", "#c2410c")
+    # status pill
+    v.rect(cx - 150, H - 74, 300, 32, "#ffffff", c["scol"], rx=16, sw=2)
+    v.text(cx, H - 52, c["status"], 15, c["scol"], weight="bold")
+    if k < 2:
+        v.add(f'<polygon points="{x + CW + 3},{H / 2 - 12} {x + CW + 15},{H / 2} {x + CW + 3},{H / 2 + 12}" '
+              f'fill="#64748b"/>')
 v.save("before-after.svg")
 
 # --------------------------------------------------------------------------------------- presence
