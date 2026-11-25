@@ -74,6 +74,13 @@ and `adc_channel.h` (**read from vendor source**):
 | Control timing | 1 HP RISC-V core at 240 MHz (shared with Wi-Fi), GPTimer, LP core | Velocity/position loop at 1 kHz from a GPTimer interrupt (IRAM, high priority). Wi-Fi interrupts add tens of microseconds of jitter at most, which a 1 ms loop absorbs |
 | Status LED | RMT: 4 channels (2 TX) | Addressable RGB LED on GPIO25 (see the LED section in hardware/control-board/README.md) |
 
+**Firmware rules this depends on** (Wi-Fi shares the core, so these keep the loop on time):
+1. Run the control loop from a GPTimer interrupt placed in IRAM, with its data in RAM (IRAM-safe), so it keeps
+   running while the flash cache is off.
+2. Never write flash (NVS settings, OTA) while the motor is moving: queue the write until the move ends.
+3. Feed a watchdog from the control loop. A stalled loop drops nSLEEP, and the move timeout still applies. If the
+   loop stalls anyway, the motor keeps its last duty, still capped at 1.10 A by the driver.
+
 **Pins.** Everything above except the ADC goes through the GPIO matrix, so no peripheral needs a particular pin.
 The hard constraints are:
 - The ADC inputs must be on GPIO1–6: IPROPI is on GPIO6 and the 12 V sense on GPIO1.
