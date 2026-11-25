@@ -133,6 +133,8 @@ the KiCad project: [hardware/control-board](hardware/control-board/).
 | [Wiring](docs/HOW-IT-WORKS.md#wiring-the-esp32) | Phase A: the connection table behind the diagram above |
 | [API](docs/API.md) | The brain's local HTTP API and every setting |
 | [Detection research](docs/DETECTION-RESEARCH.md) | Thermal sensor measurements and the detector comparison |
+| [Lab log](docs/LOG.md) · [plan](docs/PLAN.md) · [probing](docs/PROBING.md) | The research notebook: every session, the original plan and its decisions, and the probing procedures |
+| [Original detection study](docs/research/2026-11-21-detection-study.md) · [captures](captures/) | The full Grid-EYE study with figures, and the raw UART/I2C logs the docs cite |
 | [STM32 firmware](docs/STM-FIRMWARE.md) · [protocol](docs/STM-PROTOCOL.md) | Wayzn's motor controller: commands, states, status lines, and the motor driver's scales |
 | [Hardware](docs/hardware/) | The Wayzn main board, its measured geometry, the STM32 pin map and the sensor board |
 | [Control board](docs/CONTROL-BOARD.md) | Phase B: the replacement board's design, safety and control approach |
