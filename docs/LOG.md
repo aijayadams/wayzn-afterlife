@@ -2,6 +2,16 @@
 
 Newest first. One entry per session: what was done, what was learned, links.
 
+## Open items
+
+- The calibration usually ends at the closed-end stall instead of the STM's own measured end, so the
+  closed position is inferred (`position: inferred`) rather than measured. Closes are fine with
+  `stall_allowance` set, but the inferred zero is only as good as `expected_travel`.
+- Idea, not built: after an inferred zero, run one measured calibration automatically once the doorway
+  is clear.
+- A close with the position unknown runs the calibration instead. That path is host-tested but has not
+  yet happened on the door.
+
 ## 2026-11-24
 - **Bounce at the end of the close after an inferred calibration; fixed (deployed ~14:55).** Every first close after a calibration that ended at the closed stall (13:48, 13:57, 14:03 inferred zeros; also 2026-11-23 13:21) overcurrent-reversed at p=-80 (103-118 %, limit 630 mA), ran to full open, and the STM's own reclose ended at -73/-74 at 63-80 %. Closes after a measured calibration (the morning, ~25 of them) ended at -68..-71, 28-53 %, never reversed. Reading: the stall spot is the door jammed into the frame; zeroed as -72, every close tried to reach it. New setting `stall_allowance` (counts, HA "Calibration stall allowance" in inches): the stall spot is zeroed at -72 + allowance. 30 (0.039 in): calibration stalled (STM browned out at p=12343), zeroed at -42; two HA open/close cycles closed at -72, 52 % and 54 %, no bounce (owner watching).
 - **Second power-up (board resoldered, door open at power-up): drove fully open and stuck; fixed (deployed ~09:50).** Wiring checked and fine: STM UART both ways (setup taken, moves run, status flowing), NRST (25 s pulse rebooted the silent STM), motor and driver (open peak 673 mA), Grid-EYE (frames), Wi-Fi. Within 25 s every pixel read +0..+2.9 C (presence score 19); with auto-open on, presence from the unknown position sent `disengage` and the door drove fully open (p=-8222). There it stuck: HA closes were refused ("position unknown"), the calibration waited for a clear doorway, and the drift watch didn't act while open. `gebg` cleared it; auto_zero recalibrated and closed (p=-72, 17.72 in). Fixes: (1) Grid-EYE warm-up after a cold start: 90 s unused, counted as occupied but never presence; (2) drift relearn also while open when the position is unknown (no close is possible then); (3) a close with the position unknown runs the calibration (ends closed) instead of being refused.

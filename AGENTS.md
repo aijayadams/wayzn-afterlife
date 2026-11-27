@@ -37,6 +37,45 @@ equally to any firmware or hardware built here.
 - Every finding goes in `docs/` with a confidence tag: **verified** (measured
   or read), **marking** (read off the part), **inferred** (educated guess).
 
+## Working on a live door
+
+The door is in service with dogs using it. These rules apply to every session that touches it.
+
+- **Ask the owner before anything that moves the door:** `open`, `close`, `cal`, `disengage`, a test
+  move or any `raw` STM motion command. Say what will move and how far. Read-only checks (status,
+  logs, `ge`) need no go-ahead.
+- **Flash over the air only while the door is still:** check that `/api/status` `detail` is `closed` or
+  `open` first. The firmware also refuses an OTA while moving, but an update that restarts the ESP32
+  mid-calibration costs a recalibration.
+- **Power:** never connect the ESP32's USB while it is powered from the board's 3V3, and never power it
+  from VIN. Flash over Wi-Fi in the door; use USB only on the bench with board power off.
+- **After a power cycle,** check in this order (syslog or the console shows each step):
+  1. Cold start: the Grid-EYE warms up for 90 s. The doorway reads occupied, there is no auto-open and
+     no calibration in that time.
+  2. The STM has no position, so the brain runs `auto_zero` once the doorway has been clear 10 s.
+  3. The run ends either measured (`zero` from the STM) or at the closed stall (zeroed as closed,
+     `position: inferred`, with `stall_allowance` applied).
+  4. `/api/status`: `state` closed, `fault` null, `grideye_ok` true, `last_move_effort` well under 100.
+  5. With the owner's go-ahead, one open and close: the close ends near -72 at roughly 30-55 % effort
+     with no reversal.
+- **Host tests before every flash** (from `firmware/brain`):
+  `c++ -std=c++17 -O2 -I src test/host_test.cpp -o /tmp/host_test && /tmp/host_test [capture.log ...]`.
+- **Build and flash** (from `firmware/brain`, `tools/uart-sniffer/secrets.ini` filled in from the example):
+  `pio run -e brain` builds; `pio run -e brain-ota -t upload --upload-port <door-address>` flashes over
+  Wi-Fi (the default port is `wayzn-esp.local`).
+- **Console:** `nc <door-address> 23`, first line `auth <api_token>`, then `?` for the commands:
+  `status`, `ge` (one frame and its rise over the background), `gebg` (relearn the empty doorway),
+  `cal`, `fault clear`, `cfg` (resend the STM setup), `profile`, `log on|off`, `raw <stm line>`
+  (expert only). The API (docs/API.md) does the same for Home Assistant.
+- **Logs:** with `syslog_host` set, every event goes to syslog as APP-NAME `wayzn-brain`. Read those
+  first to see what the door did; they are the record of every move, refusal and fault.
+- **API changes:** docs/API.md is the contract with the `wayzn` integration's local mode
+  (aijayadams/wayzn). Change both together, and keep new fields additive.
+- **Door-specific values** (travel, stall allowance, thresholds) are settings set from Home Assistant,
+  never constants in the firmware.
+- Notes about one particular home (addresses, hostnames, deploy steps) belong in the owner's private
+  notes, not here.
+
 ## Publishing hygiene (this repo is public)
 
 Everything committed here is public for good, so check every file before it goes in:
